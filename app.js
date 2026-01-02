@@ -51,7 +51,7 @@ app.post('/interactions', async function (req, res) {
       // Handle command execution
       if (command.execute) {
         try {
-          return await command.execute(res, req);
+          return await command.execute(req, res);
         } catch (err) {
           console.error(`Error executing command ${name}:`, err);
           return res.status(500).send('Internal Server Error');
