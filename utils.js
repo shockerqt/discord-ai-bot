@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { verifyKey } from 'discord-interactions';
 
 export async function DiscordRequest(endpoint, options) {
   // append endpoint to root API URL
@@ -38,10 +39,23 @@ export async function InstallGlobalCommands(appId, commands) {
 
 // Simple method that returns a random emoji from list
 export function getRandomEmoji() {
-  const emojiList = ['😭','😄','😌','🤓','😎','😤','🤖','😶‍🌫️','🌏','📸','💿','👋','🌊','✨'];
+  const emojiList = ['😭', '😄', '😌', '🤓', '😎', '😤', '🤖', '😶‍🌫️', '🌏', '📸', '💿', '👋', '🌊', '✨'];
   return emojiList[Math.floor(Math.random() * emojiList.length)];
 }
 
 export function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+export function VerifyDiscordRequest(clientKey) {
+  return function (req, res, buf, encoding) {
+    const signature = req.get('X-Signature-Ed25519');
+    const timestamp = req.get('X-Signature-Timestamp');
+
+    const isValidRequest = verifyKey(buf, signature, timestamp, clientKey);
+    if (!isValidRequest) {
+      res.status(401).send('Bad Request Signature');
+      throw new Error('Bad Request Signature');
+    }
+  };
 }
