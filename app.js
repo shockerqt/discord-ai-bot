@@ -14,6 +14,8 @@ import * as selectCommand from './commands/select.js';
 import * as chatCommand from './commands/chat.js';
 
 import * as modelCommand from './commands/model.js';
+import * as resetCommand from './commands/reset.js';
+import * as memoryCommand from './commands/memory.js';
 
 // Create an express app
 const app = express();
@@ -29,6 +31,8 @@ const commands = {
   [selectCommand.data.name]: selectCommand,
   [chatCommand.data.name]: chatCommand,
   [modelCommand.data.name]: modelCommand,
+  [resetCommand.data.name]: resetCommand,
+  [memoryCommand.MEMORY_COMMAND.name]: { execute: memoryCommand.memoryCommand },
 };
 
 /**
