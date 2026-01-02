@@ -43,10 +43,19 @@ jobs:
             mkdir -p /tmp/zavier-deploy
             unzip -o $TEMP_ZIP -d /tmp/zavier-deploy
 
-            # 2. Sync files to target (using rsync if available is better, but mv/cp works)
-            # We use sudo to move files into /opt
-            sudo mkdir -p $TARGET_DIR
-            sudo cp -r /tmp/zavier-deploy/* $TARGET_DIR/
+            # 2. Sync files to target
+            # Ensure target directory exists and is writable by the current user
+            if [ ! -d "$TARGET_DIR" ]; then
+                echo "Creating target directory..."
+                sudo mkdir -p $TARGET_DIR
+                sudo chown -R $USER:$USER $TARGET_DIR
+            fi
+            
+            # Ensure ownership is correct before copying (in case it drifted)
+            sudo chown -R $USER:$USER $TARGET_DIR
+
+            # Now we can copy without sudo
+            cp -r /tmp/zavier-deploy/* $TARGET_DIR/
 
             # 3. Cleanup temp
             rm -rf /tmp/zavier-deploy
@@ -55,14 +64,17 @@ jobs:
             # 4. Install Dependencies & Register Commands
             cd $TARGET_DIR
             echo "Installing dependencies..."
-            sudo npm ci --production
+            # Run as current user (no sudo) - works with NVM/user-level node
+            npm ci --production
             
             echo "Registering Slash Commands..."
-            # Assumes .env exists in TARGET_DIR or is loaded via environment variables
-            sudo npm run register
+            # Run as current user (no sudo)
+            npm run register
 
             # 5. Restart Service (PM2)
             echo "Restarting service..."
-            # Assuming the process is already managed by pm2 under the current user.
+            # Using user-level PM2.
+            # NOTE: If PM2 is not found, we might need to source profile.
+            # Trying standard restart first.
             pm2 restart zavier-sama || pm2 restart app.js || echo "PM2 restart failed, check process name"
           EOF
