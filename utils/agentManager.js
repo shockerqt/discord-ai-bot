@@ -19,6 +19,22 @@ export async function getOmniAgentId() {
 
         if (existingAgent) {
             console.log(`Found existing agent: ${existingAgent.id}`);
+            // Fix: Force removal of tools if they exist (to fix rate limit issues)
+            // Ideally we check if it has tools, but for safety we can just update it.
+            // We'll do a quick check or just force update.
+            // Update to ensure tools are []
+            try {
+                await client.beta.agents.update({
+                    agentId: existingAgent.id,
+                    agentUpdateRequest: {
+                        tools: []
+                    }
+                });
+                console.log(`Ensured tools are removed for ${existingAgent.id}`);
+            } catch (err) {
+                console.warn("Failed to auto-update tools removal:", err);
+            }
+
             cachedAgentId = existingAgent.id;
             return existingAgent.id;
         }
@@ -30,7 +46,7 @@ export async function getOmniAgentId() {
             name: AGENT_NAME,
             description: "A sophisticated AI assistant named Zavier Sama.",
             instructions: AGENT_INSTRUCTIONS,
-            // tools: [{ type: "image_generation" }], // Disabled to allow rate limit recovery
+            tools: [], // Explicitly empty to remove image generation
             temperature: 0.7, // Default temperature if supported at top level, otherwise ignored
         });
 
