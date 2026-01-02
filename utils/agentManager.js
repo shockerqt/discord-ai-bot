@@ -70,9 +70,19 @@ export async function updateAgentPersona(instructions, temperature) {
         console.log(`Agent updated: ${updatedAgent.id}`);
         return updatedAgent;
 
-
     } catch (error) {
         console.error("Error updating agent persona:", error);
+        throw error;
+    }
+}
+
+export async function getAgentPersona() {
+    try {
+        const agentId = await getOmniAgentId();
+        const agent = await client.beta.agents.get({ agentId });
+        return agent;
+    } catch (error) {
+        console.error("Error fetching agent persona:", error);
         throw error;
     }
 }
