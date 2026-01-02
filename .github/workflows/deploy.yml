@@ -30,7 +30,7 @@ jobs:
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             # Define target directory
-            TARGET_DIR="/opt/discord-ai-bot"
+            TARGET_DIR="/opt/zavier-sama"
             TEMP_ZIP="/home/${{ secrets.SERVER_USER }}/deploy.zip"
 
             # Create target directory if it doesn't exist (requires sudo first time usually)
@@ -40,16 +40,16 @@ jobs:
             echo "Deploying to $TARGET_DIR..."
 
             # 1. Unzip to a temporary location to avoid downtime/mess during unzip
-            mkdir -p /tmp/discord-bot-deploy
-            unzip -o $TEMP_ZIP -d /tmp/discord-bot-deploy
+            mkdir -p /tmp/zavier-deploy
+            unzip -o $TEMP_ZIP -d /tmp/zavier-deploy
 
             # 2. Sync files to target (using rsync if available is better, but mv/cp works)
             # We use sudo to move files into /opt
             sudo mkdir -p $TARGET_DIR
-            sudo cp -r /tmp/discord-bot-deploy/* $TARGET_DIR/
+            sudo cp -r /tmp/zavier-deploy/* $TARGET_DIR/
 
             # 3. Cleanup temp
-            rm -rf /tmp/discord-bot-deploy
+            rm -rf /tmp/zavier-deploy
             rm $TEMP_ZIP
 
             # 4. Install Dependencies & Register Commands
@@ -59,14 +59,10 @@ jobs:
             
             echo "Registering Slash Commands..."
             # Assumes .env exists in TARGET_DIR or is loaded via environment variables
-            # We run with sudo to ensure access if running as root, or pass -E if env vars are needed from current shell (unlikely for .env file approach)
             sudo npm run register
 
             # 5. Restart Service (PM2)
             echo "Restarting service..."
             # Assuming the process is already managed by pm2 under the current user.
-            # If standard setup, no sudo needed for pm2 unless global with specific permissions.
-            # We use 'pm2 restart all' or by name 'discord-ai-bot'. 
-            # Using 'discord-ai-bot' as the identifier.
-            pm2 restart discord-ai-bot || pm2 restart app.js || echo "PM2 restart failed, check process name"
+            pm2 restart zavier-sama || pm2 restart app.js || echo "PM2 restart failed, check process name"
           EOF
