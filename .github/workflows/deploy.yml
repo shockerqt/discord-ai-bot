@@ -7,74 +7,43 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Create Deployment Artifact
+      - name: Deploy Application
         run: |
-          zip -r deploy.zip . -x "*.git*" "node_modules/*" ".env" ".env.sample" "tests/*" "verify_manual_guide.js"
+          # Define target directory
+          TARGET_DIR="/opt/zavier-sama"
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+          # Create/Ensure target directory permissions
+          if [ ! -d "$TARGET_DIR" ]; then
+              echo "Creating target directory..."
+              sudo mkdir -p $TARGET_DIR
+              sudo chown -R $USER:$USER $TARGET_DIR
+          fi
+          
+          # Force ownership to current runner user
+          sudo chown -R $USER:$USER $TARGET_DIR
 
-      - name: Copy Artifact to Server
-        run: scp deploy.zip ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/home/${{ secrets.SERVER_USER }}/deploy.zip
+          echo "Deploying to $TARGET_DIR..."
+          
+          # Sync files: 
+          # We use rsync for efficiency if available, or cp. 
+          # Exclude .git and node_modules to keep copy clean/fast (npm ci will rebuild)
+          rsync -av --exclude='.git' --exclude='node_modules' --exclude='.env' . $TARGET_DIR/
 
-      - name: Deploy on Server
-        run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            # Define target directory
-            TARGET_DIR="/opt/zavier-sama"
-            TEMP_ZIP="/home/${{ secrets.SERVER_USER }}/deploy.zip"
+          # Prepare Target
+          cd $TARGET_DIR
+          
+          echo "Installing dependencies..."
+          # Install dependencies locally on server
+          npm ci --production
 
-            # Create target directory if it doesn't exist (requires sudo first time usually)
-            # Assuming the user has write permissions or we use sudo for everything.
-            # Using sudo for /opt operations as per the Rust example style.
-            
-            echo "Deploying to $TARGET_DIR..."
+          echo "Registering Slash Commands..."
+          npm run register
 
-            # 1. Unzip to a temporary location to avoid downtime/mess during unzip
-            mkdir -p /tmp/zavier-deploy
-            unzip -o $TEMP_ZIP -d /tmp/zavier-deploy
-
-            # 2. Sync files to target
-            # Ensure target directory exists and is writable by the current user
-            if [ ! -d "$TARGET_DIR" ]; then
-                echo "Creating target directory..."
-                sudo mkdir -p $TARGET_DIR
-                sudo chown -R $USER:$USER $TARGET_DIR
-            fi
-            
-            # Ensure ownership is correct before copying (in case it drifted)
-            sudo chown -R $USER:$USER $TARGET_DIR
-
-            # Now we can copy without sudo
-            cp -r /tmp/zavier-deploy/* $TARGET_DIR/
-
-            # 3. Cleanup temp
-            rm -rf /tmp/zavier-deploy
-            rm $TEMP_ZIP
-
-            # 4. Install Dependencies & Register Commands
-            cd $TARGET_DIR
-            echo "Installing dependencies..."
-            # Run as current user (no sudo) - works with NVM/user-level node
-            npm ci --production
-            
-            echo "Registering Slash Commands..."
-            # Run as current user (no sudo)
-            npm run register
-
-            # 5. Restart Service (PM2)
-            echo "Restarting service..."
-            # Using user-level PM2.
-            # NOTE: If PM2 is not found, we might need to source profile.
-            # Trying standard restart first.
-            pm2 restart zavier-sama || pm2 restart app.js || echo "PM2 restart failed, check process name"
-          EOF
+          echo "Restarting service..."
+          # Restart PM2 process
+          pm2 restart zavier-sama || pm2 restart app.js || echo "PM2 restart failed, check process name"
