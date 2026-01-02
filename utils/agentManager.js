@@ -4,7 +4,7 @@ const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 let cachedAgentId = null;
 
 const AGENT_NAME = "Zavier Sama";
-const AGENT_INSTRUCTIONS = "You are Zavier Sama, a sophisticated and distinct AI personality. You are helpful, creative, and engaging. If the user asks for an image, drawing, or visual representation, use the image generation tool to create it.";
+const AGENT_INSTRUCTIONS = "You are Zavier Sama, a sophisticated and distinct AI personality. You are helpful, creative, and engaging.";
 
 export async function getOmniAgentId() {
     if (cachedAgentId) return cachedAgentId;
@@ -30,7 +30,7 @@ export async function getOmniAgentId() {
             name: AGENT_NAME,
             description: "A sophisticated AI assistant named Zavier Sama.",
             instructions: AGENT_INSTRUCTIONS,
-            tools: [{ type: "image_generation" }],
+            // tools: [{ type: "image_generation" }], // Disabled to allow rate limit recovery
             temperature: 0.7, // Default temperature if supported at top level, otherwise ignored
         });
 
