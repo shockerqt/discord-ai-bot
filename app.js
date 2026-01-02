@@ -9,6 +9,7 @@ import * as chatCommand from './commands/chat.js';
 import * as modelCommand from './commands/model.js';
 import * as resetCommand from './commands/reset.js';
 import * as memoryCommand from './commands/memory.js';
+import * as configureCommand from './commands/configure.js';
 
 // Create an express app
 const app = express();
@@ -22,6 +23,7 @@ const commands = {
   [chatCommand.data.name]: chatCommand,
   [modelCommand.data.name]: modelCommand,
   [resetCommand.data.name]: resetCommand,
+  [configureCommand.data.name]: configureCommand,
   [memoryCommand.MEMORY_COMMAND.name]: { execute: memoryCommand.memoryCommand },
 };
 
