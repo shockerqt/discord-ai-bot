@@ -4,7 +4,7 @@ const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 let cachedAgentId = null;
 
 const AGENT_NAME = "Zavier Sama";
-const AGENT_INSTRUCTIONS = "You are Zavier Sama, a sophisticated and distinct AI personality. You are helpful, creative, and engaging.";
+const AGENT_INSTRUCTIONS = "You are Zavier Sama, a sophisticated and distinct AI personality. You are helpful, creative, and engaging. If the user asks for an image, drawing, or visual representation, use the image generation tool to create it.";
 
 export async function getOmniAgentId() {
     if (cachedAgentId) return cachedAgentId;
@@ -19,20 +19,18 @@ export async function getOmniAgentId() {
 
         if (existingAgent) {
             console.log(`Found existing agent: ${existingAgent.id}`);
-            // Fix: Force removal of tools if they exist (to fix rate limit issues)
-            // Ideally we check if it has tools, but for safety we can just update it.
-            // We'll do a quick check or just force update.
-            // Update to ensure tools are []
+
+            // Re-enable image generation for existing agent
             try {
                 await client.beta.agents.update({
                     agentId: existingAgent.id,
                     agentUpdateRequest: {
-                        tools: []
+                        tools: [{ type: "image_generation" }]
                     }
                 });
-                console.log(`Ensured tools are removed for ${existingAgent.id}`);
+                console.log(`Ensured image_generation tool is enabled for ${existingAgent.id}`);
             } catch (err) {
-                console.warn("Failed to auto-update tools removal:", err);
+                console.warn("Failed to auto-update tools enable:", err);
             }
 
             cachedAgentId = existingAgent.id;
@@ -46,7 +44,7 @@ export async function getOmniAgentId() {
             name: AGENT_NAME,
             description: "A sophisticated AI assistant named Zavier Sama.",
             instructions: AGENT_INSTRUCTIONS,
-            tools: [], // Explicitly empty to remove image generation
+            tools: [{ type: "image_generation" }],
             temperature: 0.7, // Default temperature if supported at top level, otherwise ignored
         });
 
