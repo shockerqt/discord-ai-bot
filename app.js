@@ -1,30 +1,41 @@
 import 'dotenv/config';
 import express from 'express';
 import {
-  ButtonStyleTypes,
-  InteractionResponseFlags,
-  InteractionResponseType,
   InteractionType,
-  MessageComponentTypes,
+  InteractionResponseType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
-import { getRandomEmoji, DiscordRequest } from './utils.js';
-import { getShuffledOptions, getResult } from './game.js';
+
+import * as testCommand from './commands/test.js';
+import * as challengeCommand from './commands/challenge.js';
+import * as buttonCommand from './commands/button.js';
+import * as modalCommand from './commands/modal.js';
+import * as selectCommand from './commands/select.js';
+import * as chatCommand from './commands/chat.js';
+
+import * as modelCommand from './commands/model.js';
 
 // Create an express app
 const app = express();
 // Get port, or default to 3000
 const PORT = process.env.PORT || 3000;
-// To keep track of our active games
-const activeGames = {};
+
+// Command Registry
+const commands = {
+  [testCommand.data.name]: testCommand,
+  [challengeCommand.data.name]: challengeCommand,
+  [buttonCommand.data.name]: buttonCommand,
+  [modalCommand.data.name]: modalCommand,
+  [selectCommand.data.name]: selectCommand,
+  [chatCommand.data.name]: chatCommand,
+  [modelCommand.data.name]: modelCommand,
+};
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests
- * Parse request body and verifies incoming requests using discord-interactions package
  */
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
-  // Interaction id, type and data
-  const { id, type, data } = req.body;
+  const { type, data } = req.body;
 
   /**
    * Handle verification requests
@@ -35,31 +46,60 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
   /**
    * Handle slash command requests
-   * See https://discord.com/developers/docs/interactions/application-commands#slash-commands
    */
   if (type === InteractionType.APPLICATION_COMMAND) {
     const { name } = data;
+    if (commands[name]) {
+      try {
+        await commands[name].execute(req, res);
+      } catch (err) {
+        console.error(`Error executing command ${name}:`, err);
+        res.status(500).send('Internal Server Error');
+      }
+    } else {
+      console.error(`unknown command: ${name}`);
+      res.status(400).json({ error: 'unknown command' });
+    }
+    return;
+  }
 
-    // "test" command
-    if (name === 'test') {
-      // Send a message into the channel where command was triggered from
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-          components: [
-            {
-              type: MessageComponentTypes.TEXT_DISPLAY,
-              // Fetches a random emoji to send from a helper function
-              content: `hello world ${getRandomEmoji()}`
-            }
-          ]
-        },
-      });
+  /**
+   * Handle requests from interactive components
+   */
+  if (type === InteractionType.MESSAGE_COMPONENT) {
+    const componentId = data.custom_id;
+
+    // Dispatch to appropriate command based on ID prefix or known IDs
+    // For this simple example, we can check known prefixes/IDs
+
+    if (componentId.startsWith('accept_button_') || componentId.startsWith('select_choice_')) {
+      return await challengeCommand.componentHandler(req, res);
     }
 
-    console.error(`unknown command: ${name}`);
-    return res.status(400).json({ error: 'unknown command' });
+    if (componentId === 'my_button') {
+      return await buttonCommand.componentHandler(req, res);
+    }
+
+    if (componentId === 'my_select') {
+      return await selectCommand.componentHandler(req, res);
+    }
+
+    console.error('unknown component interaction', componentId);
+    return res.status(400).json({ error: 'unknown component interaction' });
+  }
+
+  /**
+   * Handle modal submissions
+   */
+  if (type === InteractionType.MODAL_SUBMIT) {
+    const modalId = data.custom_id;
+
+    if (modalId === 'my_modal') {
+      return await modalCommand.modalHandler(req, res);
+    }
+
+    console.error('unknown modal interaction', modalId);
+    return res.status(400).json({ error: 'unknown modal interaction' });
   }
 
   console.error('unknown interaction type', type);
