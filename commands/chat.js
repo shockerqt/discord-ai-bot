@@ -48,11 +48,21 @@ export async function execute(req, res) {
 
             // Helper to flush current buffer
             const flush = () => {
+                if (!currentText.trim() && currentEmbeds.length === 0) return;
+
+                while (currentText.length > 2000) {
+                    let splitIndex = currentText.lastIndexOf(' ', 2000);
+                    if (splitIndex === -1) splitIndex = 2000;
+
+                    payloads.push({ content: currentText.slice(0, splitIndex), embeds: [] });
+                    currentText = currentText.slice(splitIndex);
+                }
+
                 if (currentText.trim() || currentEmbeds.length > 0) {
                     payloads.push({ content: currentText, embeds: [...currentEmbeds] });
-                    currentText = "";
-                    currentEmbeds = [];
                 }
+                currentText = "";
+                currentEmbeds = [];
             }
 
             if (outputs && outputs.length > 0) {
