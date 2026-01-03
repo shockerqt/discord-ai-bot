@@ -44,7 +44,7 @@ export async function getOmniAgentId() {
     }
 }
 
-export async function updateAgentPersona(instructions, temperature) {
+export async function updateAgentPersona(instructions, temperature, enableImageGen) {
     try {
         const agentId = await getOmniAgentId();
         console.log(`Updating agent ${agentId} with new persona...`);
@@ -64,6 +64,12 @@ export async function updateAgentPersona(instructions, temperature) {
             updatePayload.agentUpdateRequest.completionArgs = {
                 temperature: temperature
             };
+        }
+
+        if (enableImageGen !== undefined) {
+            // If true, add the tool. If false, clear tools (or at least remove image_gen).
+            // Assuming we only manage image_generation for now.
+            updatePayload.agentUpdateRequest.tools = enableImageGen ? [{ type: "image_generation" }] : [];
         }
 
         const updatedAgent = await client.beta.agents.update(updatePayload);

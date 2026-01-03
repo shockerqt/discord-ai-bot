@@ -18,6 +18,12 @@ export const data = {
             required: false,
             min_value: 0.0,
             max_value: 1.0,
+        },
+        {
+            type: 5, // BOOLEAN
+            name: 'image_generation',
+            description: 'Enable or disable image generation capabilities',
+            required: false,
         }
     ],
     type: 1, // CHAT_INPUT
@@ -42,9 +48,10 @@ export async function execute(req, res) {
 
         const personalityOption = data.options ? data.options.find(opt => opt.name === 'personality') : null;
         const creativityOption = data.options ? data.options.find(opt => opt.name === 'creativity') : null;
+        const imageGenOption = data.options ? data.options.find(opt => opt.name === 'image_generation') : null;
 
         // CASE 1: No arguments provided -> Show current settings
-        if (!personalityOption && !creativityOption) {
+        if (!personalityOption && !creativityOption && !imageGenOption) {
             const currentParams = await getAgentPersona();
             // Assuming structure, verify actual response structure. 
             // Usually agent.instructions and agent.completion_args.temperature or similar.
@@ -57,11 +64,13 @@ export async function execute(req, res) {
 
             // Safe access
             const currentTemp = currentParams.temperature ?? (currentParams.completionArgs?.temperature) ?? "Default";
+            const currentTools = currentParams.tools || [];
+            const hasImageGen = currentTools.some(t => t.type === 'image_generation');
 
             await DiscordRequest(endpoint, {
                 method: 'PATCH',
                 body: {
-                    content: `ℹ️ **Current Configuration for Zavier Sama**\n\n**Personality:**\n> ${currentInstructions || '(None)'}\n\n**Creativity:** ${currentTemp}`,
+                    content: `ℹ️ **Current Configuration for Zavier Sama**\n\n**Personality:**\n> ${currentInstructions || '(None)'}\n\n**Creativity:** ${currentTemp}\n\n**Image Generation:** ${hasImageGen ? '✅ Enabled' : '❌ Disabled'}`,
                 },
             });
             return;
@@ -70,19 +79,22 @@ export async function execute(req, res) {
         // CASE 2: Arguments provided -> Update and Show Result
         let instructions = personalityOption ? personalityOption.value : undefined;
         let temperature = creativityOption ? creativityOption.value : undefined;
+        let enableImage = imageGenOption ? imageGenOption.value : undefined;
 
         // Perform update
-        const updatedAgent = await updateAgentPersona(instructions, temperature);
+        const updatedAgent = await updateAgentPersona(instructions, temperature, enableImage);
 
         // Retrieve final values to display "Unchanged" values correctly
         // updatedAgent should contain the full new state
         const finalInstructions = updatedAgent.instructions;
         const finalTemp = updatedAgent.temperature ?? (updatedAgent.completionArgs?.temperature) ?? "Default";
+        const finalTools = updatedAgent.tools || [];
+        const finalHasImageGen = finalTools.some(t => t.type === 'image_generation');
 
         await DiscordRequest(endpoint, {
             method: 'PATCH',
             body: {
-                content: `✅ **Configuration Updated!**\n\n**Personality:**\n> ${finalInstructions || '(None)'}\n\n**Creativity:** ${finalTemp}`,
+                content: `✅ **Configuration Updated!**\n\n**Personality:**\n> ${finalInstructions || '(None)'}\n\n**Creativity:** ${finalTemp}\n\n**Image Generation:** ${finalHasImageGen ? '✅ Enabled' : '❌ Disabled'}`,
             },
         });
 

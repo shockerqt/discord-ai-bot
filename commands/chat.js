@@ -43,7 +43,7 @@ export async function execute(req, res) {
         // Helper function
         const processOutputs = async (outputs) => {
             const payloads = []; // Array of { content: string, embeds: [] }
-            let currentText = "";
+            let currentText = `> ${userMessage}\n\n`;
             let currentEmbeds = [];
 
             // Helper to flush current buffer
@@ -95,7 +95,7 @@ export async function execute(req, res) {
                             }
                         }
                     } else {
-                        currentText = lastOutput.content;
+                        currentText += lastOutput.content;
                     }
                 }
             }

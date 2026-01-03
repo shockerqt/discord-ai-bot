@@ -3,20 +3,20 @@ import express from 'express';
 import {
   InteractionType,
   InteractionResponseType,
+  verifyKeyMiddleware,
 } from 'discord-interactions';
-import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
+import { DiscordRequest } from './utils.js';
 import * as chatCommand from './commands/chat.js';
 import * as modelCommand from './commands/model.js';
 import * as resetCommand from './commands/reset.js';
 import * as memoryCommand from './commands/memory.js';
 import * as configureCommand from './commands/configure.js';
+import * as pingCommand from './commands/ping.js';
 
 // Create an express app
 const app = express();
 // Get port, or default to 3000
 const PORT = process.env.PORT || 3000;
-// Parse request body and verifies incoming requests using discord-interactions package
-app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
 
 // Command Registry
 const commands = {
@@ -25,12 +25,13 @@ const commands = {
   [resetCommand.data.name]: resetCommand,
   [configureCommand.data.name]: configureCommand,
   [memoryCommand.MEMORY_COMMAND.name]: { execute: memoryCommand.memoryCommand },
+  [pingCommand.data.name]: pingCommand,
 };
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests
  */
-app.post('/interactions', async function (req, res) {
+app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
   // Interaction type and data
   const { type, id, data } = req.body;
 
