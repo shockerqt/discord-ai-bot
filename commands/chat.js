@@ -61,14 +61,14 @@ export async function handlePassiveMessage(messages) {
         // Update Active Timestamp
         handlePassiveMessage.channelLastActive.set(contextId, nowTime);
         debugRngInfo = "Mode: Active (Mentioned) | 3.0m left";
-        forcedInstruction = "\n\n[SISTEMA]: MODO ACTIVO INICIADO. Tienes 3.0 minutos de atención prioritaria. Responde SOLO si el mensaje ES RELEVANTE para la conversación en curso o si te mencionan directamente. Si cambian de tema a algo que no te incumbe, IGNORA (<SEND_TEXT>: FALSE).";
+        forcedInstruction = "\n\n[SISTEMA]: MODO ACTIVO INICIADO. Tienes 3.0 minutos de atención prioritaria. Responde (TEXTO o REACCIÓN) SOLO si el mensaje ES RELEVANTE para la conversación en curso o si te mencionan directamente. Si cambian de tema a algo que no te incumbe, IGNORA (<SEND_TEXT>: FALSE, <REACTION>: NULL).";
         console.log("[Active Mode] Refreshed by Mention.");
     } else if (isActiveMode) {
         // ACTIVE MODE (Timer)
         // Bypass RNG, but conditional response based on relevance logic
         const timeLeft = (3 - (nowTime - lastActiveTime) / 60000).toFixed(1);
         debugRngInfo = `Mode: Active (Timer) | ${timeLeft}m left`;
-        forcedInstruction = `\n\n[SISTEMA]: MODO ACTIVO (${timeLeft}m restantes). El usuario te habló hace poco. Responde SOLO si el mensaje sigue el hilo de la conversación original. Si el usuario habla de otra cosa irrelevante para ti, DEBES IGNORAR (<SEND_TEXT>: FALSE).`;
+        forcedInstruction = `\n\n[SISTEMA]: MODO ACTIVO (${timeLeft}m restantes). El usuario te habló hace poco. Responde (TEXTO o REACCIÓN) SOLO si el mensaje sigue el hilo de la conversación original. Si el usuario habla de otra cosa irrelevante para ti, DEBES IGNORAR.`;
         console.log(`[Active Mode] Timer Active. ${debugRngInfo}`);
     } else {
         // PASSIVE MODE (RNG)
@@ -115,8 +115,7 @@ This is your inner monologue. Use it to "Think out loud" (Chain of Thought).
 5. **Final Decision**: Check the CURRENT MODE provided in system instructions.
    - If **SILENT MODE**: You MUST set <SEND_TEXT> to FALSE. You may set a <REACTION> only if strictly necessary to avoid spam.
    - If **TEXT ENABLED**: You may set <SEND_TEXT> to TRUE if relevant.
-   - If **ACTIVE MODE**: You prioritize responding if relevant.
-</THOUGHT>
+   - If **ACTIVE MODE**: Respond if relevant. (Text OR Reaction are valid).
 </THOUGHT>
 <SEND_TEXT>
 TRUE o FALSE
