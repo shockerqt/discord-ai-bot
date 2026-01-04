@@ -77,7 +77,7 @@ export async function handlePassiveMessage(messages) {
 
         if (roll < 95) {
             // 95% Silent Mode
-            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO SILENCIOSO. El RNG SOLO decidió que NO tienes permiso para hablar esta vez. Tu personalidad y nivel de caos NO cambian por el RNG. Configura <SEND_TEXT> en FALSE. <REACTION> permitida SOLO si es estrictamente necesario (evita el spam).`;
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO SILENCIOSO. El RNG SOLO decidió que NO tienes permiso para hablar esta vez. Tu personalidad y nivel de caos NO cambian por el RNG. Configura <SEND_TEXT> en FALSE. <REACTION> DEBE SER NULL (Prohibido reaccionar en este modo).`;
             modeName = "Silent";
         } else {
             // 5% Free Mode (Text + Reaction Allowed)
@@ -95,7 +95,8 @@ export async function handlePassiveMessage(messages) {
 
     // Append batch messages line by line
     for (const msg of msgs) {
-        fullContent += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${msg.author.username}: ${msg.content}\n`;
+        const authorName = msg.member ? msg.member.displayName : msg.author.username;
+        fullContent += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${authorName}: ${msg.content}\n`;
     }
 
     const OUTPUT_INSTRUCTION = `
