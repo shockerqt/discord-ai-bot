@@ -110,12 +110,14 @@ export async function handlePassiveMessage(messages) {
 ### FORMATO DE SALIDA (TAGS OBLIGATORIO) -- NO USES JSON
 Responde SIEMPRE usando estos tags exactos. No incluyas nada fuera de los tags.
 <THOUGHT>
-This is your inner monologue. Think freely and causually about the situation, the user's message, and the context (including your personality and current mood logic).
-Draft your thoughts here. You can be verbose.
-Finally, determine:
-1. Is this relevant to me?
-2. Should I reply? (Active Mode vs Passive RNG rules)
-3. If responding, what is the best tone?
+This is your inner monologue. Use it to "Think out loud" (Chain of Thought).
+1. **Analyze Intent**: What does the user want? Is it a question, a statement, or just noise?
+2. **Context & Relevance**: Is this addressed to me (Lumi)? Should I intervene based on the current mode (Active/Passive)?
+3. **Drafting**: Formulate the best possible response. 
+   - If ignoring: Explain why.
+   - If responding: What is the best tone? (Sarcastic, helpful, cute, etc. based on personality).
+4. **Refinement**: Review your draft. Is it consistent? Is it too long? Refine it.
+5. **Final Decision**: Set <SEND_TEXT> and <REACTION>.
 </THOUGHT>
 <SEND_TEXT>
 TRUE o FALSE
