@@ -61,12 +61,14 @@ export async function handlePassiveMessage(messages) {
         // Update Active Timestamp
         handlePassiveMessage.channelLastActive.set(contextId, nowTime);
         debugRngInfo = "Mode: Active (Mentioned) | 3.0m left";
+        forcedInstruction = "\n\n[SISTEMA]: MODO ACTIVO INICIADO. Tienes 3.0 minutos de atención prioritaria. Responde libremente si el mensaje es relevante.";
         console.log("[Active Mode] Refreshed by Mention.");
     } else if (isActiveMode) {
         // ACTIVE MODE (Timer)
         // Bypass RNG, but conditional response based on relevance logic
-        debugRngInfo = `Mode: Active (Timer) | ${(3 - (nowTime - lastActiveTime) / 60000).toFixed(1)}m left`;
-        forcedInstruction = "\n\n[SISTEMA]: MODO ACTIVO (Conversación fluida). El usuario te habló hace poco. Responde si el mensaje sigue el hilo o es relevante. Si cambia de tema a algo irrelevante, puedes ignorar (`send_text: false`).";
+        const timeLeft = (3 - (nowTime - lastActiveTime) / 60000).toFixed(1);
+        debugRngInfo = `Mode: Active (Timer) | ${timeLeft}m left`;
+        forcedInstruction = `\n\n[SISTEMA]: MODO ACTIVO (${timeLeft}m restantes). El usuario te habló hace poco. Responde si el mensaje sigue el hilo o es relevante. Si cambia de tema a algo irrelevante, puedes ignorar (<SEND_TEXT>: FALSE).`;
         console.log(`[Active Mode] Timer Active. ${debugRngInfo}`);
     } else {
         // PASSIVE MODE (RNG)
