@@ -80,9 +80,9 @@ export async function handlePassiveMessage(messages) {
             forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO SILENCIOSO. Solo procesa el contexto. Configura <SEND_TEXT> en FALSE. <REACTION> permitida SOLO si es estrictamente necesario (evita el spam, verifica si ya reaccionaste antes).`;
             modeName = "Silent";
         } else {
-            // 5% Text Mode (Replaces Text Only / Text + Emoji)
-            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO TEXTO. Tienes permiso para hablar (<SEND_TEXT>: TRUE) si el contexto lo amerita.`;
-            modeName = "Text Enabled";
+            // 5% Free Mode (Text + Reaction Allowed)
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO LIBRE. Tienes permiso total para hablar (<SEND_TEXT>: TRUE) o reaccionar si el contexto lo amerita.`;
+            modeName = "Free Mode";
         }
 
         debugRngInfo = `Mode: ${modeName} (Roll: ${roll.toFixed(2)}%)`;
@@ -114,10 +114,6 @@ This is your inner monologue. Use it to "Think out loud" (Chain of Thought).
    - Check Emoji Frequency: Have I used emojis recently? If yes, AVOID using them again unless it is the ABSOLUTE BEST moment for it.
    - Style Check: Keep it SHORT and CONCISE like a real Discord user. AVOID markers like bold/italics unless critical for emphasis. No yapping.
    - Refine draft accordingly.
-5. **Final Decision**: Check the CURRENT MODE provided in system instructions.
-   - If **SILENT MODE**: You MUST set <SEND_TEXT> to FALSE. You may set a <REACTION> only if strictly necessary to avoid spam.
-   - If **TEXT ENABLED**: You may set <SEND_TEXT> to TRUE if relevant.
-   - If **ACTIVE MODE**: Respond if relevant. (Text OR Reaction are valid).
 </THOUGHT>
 <SEND_TEXT>
 TRUE o FALSE
