@@ -117,7 +117,10 @@ This is your inner monologue. Use it to "Think out loud" (Chain of Thought).
    - If ignoring: Explain why.
    - If responding: What is the best tone? (Sarcastic, helpful, cute, etc. based on personality).
 4. **Refinement**: Review your draft. Is it consistent? Is it too long? Refine it.
-5. **Final Decision**: Set <SEND_TEXT> and <REACTION>.
+5. **Final Decision**: Check the CURRENT MODE (Silent, Emoji, Text).
+   - If Silent: FORCE <SEND_TEXT> FALSE.
+   - If Emoji Only: FORCE <SEND_TEXT> FALSE, set <REACTION>.
+   - Otherwise: Set <SEND_TEXT> and <REACTION> as planned.
 </THOUGHT>
 <SEND_TEXT>
 TRUE o FALSE
