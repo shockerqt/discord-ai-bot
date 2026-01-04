@@ -3,11 +3,17 @@ import { Mistral } from '@mistralai/mistralai';
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 let cachedAgentId = null;
 
-const AGENT_NAME = "Zavier Sama";
-const AGENT_INSTRUCTIONS = "You are Zavier Sama, a sophisticated and distinct AI personality. You are helpful, creative, and engaging.";
+const AGENT_NAME = "Lumi";
+const AGENT_DESCRIPTION = "shitposting 24/7. si me pingueas me das cringe. no soy soporte técnico.";
 
 export async function getOmniAgentId() {
     if (cachedAgentId) return cachedAgentId;
+
+    if (process.env.AGENT_ID) {
+        cachedAgentId = process.env.AGENT_ID;
+        console.log(`Using configured AGENT_ID: ${cachedAgentId}`);
+        return cachedAgentId;
+    }
 
     try {
         // 1. List existing agents to see if we already created one
@@ -28,8 +34,7 @@ export async function getOmniAgentId() {
         const newAgent = await client.beta.agents.create({
             model: "mistral-large-latest",
             name: AGENT_NAME,
-            description: "A sophisticated AI assistant named Zavier Sama.",
-            instructions: AGENT_INSTRUCTIONS,
+            description: AGENT_DESCRIPTION,
             // tools: [{ type: "image_generation" }], // Disabled to allow rate limit recovery
             temperature: 0.7, // Default temperature if supported at top level, otherwise ignored
         });
