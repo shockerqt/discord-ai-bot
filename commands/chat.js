@@ -60,7 +60,7 @@ export async function handlePassiveMessage(messages) {
     if (isMentioned) {
         // Update Active Timestamp
         handlePassiveMessage.channelLastActive.set(contextId, nowTime);
-        debugRngInfo = "Mode: Active (Mentioned)";
+        debugRngInfo = "Mode: Active (Mentioned) | 3.0m left";
         console.log("[Active Mode] Refreshed by Mention.");
     } else if (isActiveMode) {
         // ACTIVE MODE (Timer)
