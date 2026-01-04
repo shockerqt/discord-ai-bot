@@ -15,6 +15,7 @@ import * as memoryCommand from './commands/memory.js';
 import * as configureCommand from './commands/configure.js';
 import * as pingCommand from './commands/ping.js';
 import * as joinCommand from './commands/join.js';
+import * as debugCommand from './commands/debug.js';
 
 // Create an express app
 const app = express();
@@ -34,6 +35,7 @@ const commands = {
   [memoryCommand.MEMORY_COMMAND.name]: { execute: memoryCommand.memoryCommand },
   [pingCommand.data.name]: pingCommand,
   [joinCommand.data.name]: joinCommand,
+  [debugCommand.data.name]: debugCommand,
 };
 
 /**
