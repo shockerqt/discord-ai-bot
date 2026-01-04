@@ -77,11 +77,11 @@ export async function handlePassiveMessage(messages) {
 
         if (roll < 95) {
             // 95% Silent Mode
-            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO SILENCIOSO. Solo procesa el contexto. Configura <SEND_TEXT> en FALSE. <REACTION> permitida SOLO si es estrictamente necesario (evita el spam, verifica si ya reaccionaste antes).`;
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO SILENCIOSO. El RNG SOLO decidió que NO tienes permiso para hablar esta vez. Tu personalidad y nivel de caos NO cambian por el RNG. Configura <SEND_TEXT> en FALSE. <REACTION> permitida SOLO si es estrictamente necesario (evita el spam).`;
             modeName = "Silent";
         } else {
             // 5% Free Mode (Text + Reaction Allowed)
-            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO LIBRE. Tienes permiso total para hablar (<SEND_TEXT>: TRUE) o reaccionar si el contexto lo amerita.`;
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO LIBRE. El RNG SOLO decidió que TIENES permiso para hablar esta vez. Tu personalidad y nivel de caos NO cambian por el RNG - siempre eres tú misma. Puedes responder (<SEND_TEXT>: TRUE) o reaccionar si el contexto lo amerita.`;
             modeName = "Free Mode";
         }
 
@@ -102,31 +102,46 @@ export async function handlePassiveMessage(messages) {
 ### FORMATO DE SALIDA (TAGS OBLIGATORIO) -- NO USES JSON
 Responde SIEMPRE usando estos tags exactos. No incluyas nada fuera de los tags.
 <THOUGHT>
-This is your inner monologue. Use it to "Think out loud" (Chain of Thought).
-0. **Analyze Current Mode**: Read system instructions. Am I in Silent (no text), Free (text allowed), or Active Mode. What are my constraints?
-1. **Analyze Intent**: What does the user want? Is it a question, a statement, or just noise?
-2. **Context & Relevance**: Is this addressed to me (Lumi)? Should I intervene based on the current mode (Active/Passive)?
-3. **Drafting**: Formulate the best possible response. 
-   - If ignoring: Explain why.
-   - If responding: What is the best tone? (Sarcastic, helpful, cute, etc. based on personality).
-4. **Refinement & Variety**: 
-   - Check Context: Is this topic still relevant to me? (Active Mode strictness).
-   - Check Repetition: Am I repeating a joke, phrase, or tone too much? VARIETY IS REQUIRED.
-   - Check Emoji Frequency: Have I used emojis recently? If yes, AVOID using them again unless it is the ABSOLUTE BEST moment for it.
-   - Style Check: Keep it SHORT and CONCISE like a real Discord user. AVOID markers like bold/italics unless critical for emphasis. No yapping.
-   - Refine draft accordingly.
+Piensa como si fueras una persona real en Discord:
+
+1. **Primera impresión**: ¿Qué siento al leer esto? ¿Me da risa, me aburre, me interesa, me irrita? ¿Cuál es mi reacción instintiva?
+
+2. **¿Me están hablando? (CONTEXTO DE CHAT GRUPAL)**: 
+   - Estamos en un grupo. NO todo gira en torno a mí.
+   - **Discernir Atención**: No hace falta un @tag para que me hablen. Si dicen "Lumi", me están invocando.
+   - **¿Me hablan A mí o DE mí?**:
+     - "Lumi, ¿qué opinas?" -> Me hablan A mí -> Responder.
+     - "Lumi es muy rara" -> Hablan DE mí -> Evaluar. A menudo es mejor dejar pasar el comentario o reaccionar (emoji) en lugar de meterse a la fuerza.
+   - Si no me hablan ni A mí ni DE mí, y el tema es ajeno -> IGNORAR (Lurkear).
+   - Intervenir en cada mensaje es molesto. Aprende a callar y observar.
+
+3. **Leer el ambiente**: ¿Cómo está el chat? ¿Están de buen humor, serios, trolleando? ¿Es momento de meter cuchara o mejor callarme? Revisa el modo actual (Silencioso/Libre/Activo) y respétalo.
+
+4. **Si decido responder**: Revisa tu personalidad en las instrucciones del agente. Formula algo que suene a TI, no a un bot genérico. ¿Qué diría alguien con MI personalidad en esta situación?
+
+5. **Decisión de Reacción (CHECK DE REGLAS)**:
+   - **Frecuencia (OBLIGATORIA)**: ¿He reaccionado en los últimos 5-10 mensajes? Si SÍ -> ABORTAR reacción (NULL). Las reacciones deben ser ESPACIADAS.
+   - **Excepción Ultra Rara**: Solo si es una ocasión MUY ínfima puedo hacer spam de emojis o letras regionales (🇦🇧🇨...). REGLA: Si ya usé este recurso alguna vez, JAMÁS repetirlo.
+   - **Justificación**: ¿Es genuinamente gracioso o necesario? Si no -> ABORTAR.
+
+6. **Último check antes de enviar**:
+   - ¿Suena natural? ¿Un usuario real de Discord escribiría esto?
+   - ¿Es corto y directo? Nada de párrafos largos.
+   - ¿Estoy repitiendo algo que ya dije antes? Variedad es clave.
+   - Si algo no cuadra, reescríbelo.
 </THOUGHT>
 <SEND_TEXT>
 TRUE o FALSE
 </SEND_TEXT>
 <TEXT_CONTENT>
-Tu respuesta de texto aquí. Vacío si SEND_TEXT es FALSE.
+Tu respuesta de texto aquí. Vacío si SEND_TEXT es FALSE. Respuesta directa sin comillas.
 </TEXT_CONTENT>
 <REPLY_TO>
 ID del mensaje al que respondes o NULL
 </REPLY_TO>
 <REACTION>
-Emoji o NULL
+Uno o más emojis (ej: 😂 o 🔥💀) o NULL.
+Usa NULL si no pasaste el Check de Reglas (Paso 5) en tu pensamiento.
 </REACTION>`;
 
     // REORDER: System/Context instructions FIRST, then Format instructions.
@@ -157,143 +172,203 @@ Emoji o NULL
 
     try {
         let conversationId = getConversationId(contextId);
-        let outputs = [];
+        let contentBuffer = "";
+        let currentState = "idle"; // "idle" | "thinking" | "writing"
+        let hasShownTyping = false;
+
+        // Función auxiliar para extraer texto de eventos de streaming
+        const extractTextFromEvent = (event) => {
+            // DEBUG: Loguear estructura completa del evento (comentar después de debuggear)
+            // console.log("[Stream Event]", JSON.stringify(event, null, 2));
+
+            // Manejar eventos message.output.delta - el contenido está en event.data.content
+            if (event.data?.type === 'message.output.delta' && event.data.content) {
+                return event.data.content;
+            }
+
+            // Manejar content.delta (formato alternativo)
+            if (event.data?.type === 'content.delta' && event.data.delta?.text) {
+                return event.data.delta.text;
+            }
+
+            // Verificar propiedades directas (el evento podría no tener .data)
+            if (event.type === 'message.output.delta' && event.content) {
+                return event.content;
+            }
+
+            if (event.type === 'content.delta' && event.delta?.text) {
+                return event.delta.text;
+            }
+
+            // Manejar array de outputs si está presente (para eventos finales)
+            if (event.data?.outputs && Array.isArray(event.data.outputs)) {
+                return event.data.outputs
+                    .filter(o => o.content)
+                    .map(o => {
+                        if (Array.isArray(o.content)) {
+                            return o.content.filter(p => p.type === 'text').map(p => p.text).join('');
+                        }
+                        return typeof o.content === 'string' ? o.content : '';
+                    })
+                    .join('');
+            }
+
+            return "";
+        };
+
+        let streamResult;
 
         if (!conversationId) {
             const agentId = await getOmniAgentId();
-            // Start new conversation
-            const startParams = {
+            // Iniciar nueva conversación con streaming
+            streamResult = await client.beta.conversations.startStream({
                 agentId: agentId,
                 inputs: [{ role: 'user', content: fullContent }]
-            };
-            const convoResponse = await client.beta.conversations.start(startParams);
-            conversationId = convoResponse.conversationId || convoResponse.id;
-            setConversationId(contextId, conversationId);
-            outputs = convoResponse.outputs;
+            });
         } else {
-            // Append
-            const convoResponse = await client.beta.conversations.append({
+            // Continuar conversación con streaming
+            streamResult = await client.beta.conversations.appendStream({
                 conversationId: conversationId,
-                conversationAppendRequest: {
+                conversationAppendStreamRequest: {
                     inputs: [{ role: 'user', content: fullContent }]
                 }
             });
-            outputs = convoResponse.outputs;
         }
 
-        // Parse Output
-        // The beta API returns 'outputs' array. We usually want the last one.
-        if (outputs && outputs.length > 0) {
-            const lastOutput = outputs[outputs.length - 1];
-            let contentStr = "";
+        // Procesar el stream
+        for await (const event of streamResult) {
+            // Extraer ID de conversación del primer evento si es una nueva conversación
+            if (!conversationId && event.data?.conversationId) {
+                conversationId = event.data.conversationId;
+                setConversationId(contextId, conversationId);
+            }
 
-            if (lastOutput.content) {
-                if (Array.isArray(lastOutput.content)) {
-                    // Combine text parts if it's an array
-                    contentStr = lastOutput.content
-                        .filter(p => p.type === 'text')
-                        .map(p => p.text)
-                        .join("");
-                } else if (typeof lastOutput.content === 'string') {
-                    contentStr = lastOutput.content;
+            const chunk = extractTextFromEvent(event);
+            contentBuffer += chunk;
+
+            // Detectar apertura de tags para cambiar estado
+            if (contentBuffer.includes("<THOUGHT>") && !contentBuffer.includes("</THOUGHT>")) {
+                if (currentState !== "thinking") {
+                    currentState = "thinking";
+                    console.log("[Streaming] State: THINKING");
                 }
             }
 
-            // Strip code blocks if AI wrapped it in ```xml ... ```
-            contentStr = contentStr.replace(/```xml/g, '').replace(/```/g, '').trim();
+            // Solo mostrar typing si hay contenido real después de <TEXT_CONTENT>
+            if (contentBuffer.includes("<TEXT_CONTENT>") && !contentBuffer.includes("</TEXT_CONTENT>")) {
+                // Extraer contenido después del tag de apertura
+                const afterTag = contentBuffer.split("<TEXT_CONTENT>")[1] || "";
+                // Verificar si hay contenido que no sea solo espacios en blanco
+                if (afterTag.trim().length > 0 && currentState !== "writing" && !hasShownTyping) {
+                    currentState = "writing";
+                    console.log("[Streaming] State: WRITING - Sending typing indicator");
+                    await lastMessage.channel.sendTyping();
+                    hasShownTyping = true;
+                }
+            }
+        }
 
-            console.log("--- RAW RESPONSE ---");
-            console.log(contentStr);
-            console.log("--------------------");
+        // Si aún no tenemos conversationId guardado (caso edge), intentar guardarlo
+        if (!getConversationId(contextId) && conversationId) {
+            setConversationId(contextId, conversationId);
+        }
 
-            // PARSE TAGS using Regex
-            const extract = (tag) => {
-                const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\/${tag}>`, 'i');
-                const match = contentStr.match(regex);
-                return match ? match[1].trim() : null;
-            };
+        // Strip code blocks if AI wrapped it in ```xml ... ```
+        let contentStr = contentBuffer.replace(/```xml/g, '').replace(/```/g, '').trim();
 
-            const thought = extract('THOUGHT');
-            const sendTextRaw = extract('SEND_TEXT');
-            const textContent = extract('TEXT_CONTENT');
-            const replyToRaw = extract('REPLY_TO');
-            const reactionRaw = extract('REACTION');
+        console.log("--- RAW RESPONSE ---");
+        console.log(contentStr);
+        console.log("--------------------");
 
-            const parsedResponse = {
-                thought: thought || "",
-                send_text: sendTextRaw && sendTextRaw.toUpperCase().includes('TRUE'),
-                text_content: textContent || "",
-                reply_to: (replyToRaw && replyToRaw.toUpperCase() !== 'NULL') ? replyToRaw : null,
-                reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null
-            };
+        // PARSE TAGS using Regex
+        const extract = (tag) => {
+            const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
+            const match = contentStr.match(regex);
+            return match ? match[1].trim() : null;
+        };
 
-            console.log("--- PARSED RESPONSE ---");
-            console.log(parsedResponse);
-            console.log("-----------------------");
+        const thought = extract('THOUGHT');
+        const sendTextRaw = extract('SEND_TEXT');
+        const textContent = extract('TEXT_CONTENT');
+        const replyToRaw = extract('REPLY_TO');
+        const reactionRaw = extract('REACTION');
 
-            // --- Process Parsed Output ---
-            // Fix: Do not push to outputs and iterate, use parsedResponse directly.
-            const output = parsedResponse;
+        const parsedResponse = {
+            thought: thought || "",
+            send_text: sendTextRaw && sendTextRaw.toUpperCase().includes('TRUE'),
+            text_content: textContent || "",
+            reply_to: (replyToRaw && replyToRaw.toUpperCase() !== 'NULL') ? replyToRaw : null,
+            reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null
+        };
 
-            // Debug Mode Output
-            if (debugChannels.has(contextId)) {
-                const debugContent = `
+        console.log("--- PARSED RESPONSE ---");
+        console.log(parsedResponse);
+        console.log("-----------------------");
+
+        // --- Process Parsed Output ---
+        const output = parsedResponse;
+
+        // Debug Mode Output
+        if (debugChannels.has(contextId)) {
+            const debugContent = `
 RNG INFO: ${debugRngInfo}
 
 --- COMPLETE RAW XML ---
 ${contentStr}
 `;
-                const buffer = Buffer.from('\uFEFF' + debugContent, 'utf-8');
-                try {
-                    await lastMessage.channel.send({
-                        content: `**[DEBUG OUTPUT]**`,
-                        files: [{
-                            attachment: buffer,
-                            name: `debug-${Date.now()}.txt`
-                        }]
-                    });
-                } catch (err) {
-                    console.error("Failed to send debug attachment:", err);
-                }
+            const buffer = Buffer.from('\uFEFF' + debugContent, 'utf-8');
+            try {
+                await lastMessage.channel.send({
+                    content: `**[DEBUG OUTPUT]**`,
+                    files: [{
+                        attachment: buffer,
+                        name: `debug-${Date.now()}.txt`
+                    }]
+                });
+            } catch (err) {
+                console.error("Failed to send debug attachment:", err);
             }
+        }
 
-            if (output.send_text && output.text_content) {
-                // Send Typing
+        if (output.send_text && output.text_content) {
+            // Send Typing (might already have been sent, but ensure it)
+            if (!hasShownTyping) {
                 await lastMessage.channel.sendTyping();
-
-                // ... logic to send message ...
-                const msgOptions = { content: output.text_content };
-                if (output.reply_to) {
-                    msgOptions.reply = { messageReference: output.reply_to };
-                }
-
-                try {
-                    await lastMessage.channel.send(msgOptions);
-                } catch (sendErr) {
-                    console.error("Failed to send message:", sendErr);
-                }
             }
 
-            if (output.reaction) {
-                try {
-                    // Support multiple reactions (e.g. "🎲⏳💀")
-                    // Use Intl.Segmenter to properly split emojis (grapheme clusters)
-                    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-                    const reactions = Array.from(segmenter.segment(output.reaction)).map(s => s.segment);
+            // ... logic to send message ...
+            const msgOptions = { content: output.text_content };
+            if (output.reply_to) {
+                msgOptions.reply = { messageReference: output.reply_to };
+            }
 
-                    // Limit to first 3 to avoid spam if AI goes crazy
-                    for (const reactionEmoji of reactions.slice(0, 3)) {
-                        try {
-                            await lastMessage.react(reactionEmoji);
-                        } catch (e) {
-                            console.error(`Failed to react with ${reactionEmoji}:`, e.message);
-                        }
+            try {
+                await lastMessage.channel.send(msgOptions);
+            } catch (sendErr) {
+                console.error("Failed to send message:", sendErr);
+            }
+        }
+
+        if (output.reaction) {
+            try {
+                // Support multiple reactions (e.g. "🎲⏳💀")
+                // Use Intl.Segmenter to properly split emojis (grapheme clusters)
+                const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+                const reactions = Array.from(segmenter.segment(output.reaction)).map(s => s.segment);
+
+                // Limit to first 3 to avoid spam if AI goes crazy
+                for (const reactionEmoji of reactions.slice(0, 3)) {
+                    try {
+                        await lastMessage.react(reactionEmoji);
+                    } catch (e) {
+                        console.error(`Failed to react with ${reactionEmoji}:`, e.message);
                     }
-                } catch (e) {
-                    console.error(`Failed to process reactions:`, e.message);
                 }
+            } catch (e) {
+                console.error(`Failed to process reactions:`, e.message);
             }
-        } // End if (outputs)
+        }
+
 
     } catch (error) { // End try
         console.error("Error calling Mistral:", error);
