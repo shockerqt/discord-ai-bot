@@ -16,6 +16,7 @@ import * as configureCommand from './commands/configure.js';
 import * as pingCommand from './commands/ping.js';
 import * as joinCommand from './commands/join.js';
 import * as debugCommand from './commands/debug.js';
+import * as historyCommand from './commands/history.js';
 
 // Create an express app
 const app = express();
@@ -36,6 +37,7 @@ const commands = {
   [pingCommand.data.name]: pingCommand,
   [joinCommand.data.name]: joinCommand,
   [debugCommand.data.name]: debugCommand,
+  [historyCommand.data.name]: historyCommand,
 };
 
 /**

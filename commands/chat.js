@@ -205,6 +205,26 @@ export async function handlePassiveMessage(messages) {
     // messsage.mentions.users.has(botId)
     // We can get botId from the message.client.user.id
 
+    // State for Active Mode (3 minutes)
+    // Note: In a persistent bot, this should be outside the function scope. 
+    // Since 'handlePassiveMessage' is exported, we need a module-level variable. 
+    // Let's assume we can declare it at the top of the file, but for now, we'll check if we can attach it to the client or use a global.
+    // Ideally, define `const channelLastActive = new Map();` at the top of the file. 
+    // BUT since we are editing a chunk inside a function, I will rely on a module-level variable that I will ADD in a separate edit or assume exists? 
+    // No, I should add it at the top level first or check if I can add it here. 
+    // Wait, the user wants me to edit `chat.js`. I can't easily see the top level right now without viewing the file again, 
+    // but I can add it to the `client` object if passed? No, `client` is the Mistral client.
+    // Let's use a static property on the function or a global map in this module. 
+
+    // Better idea: I will add the Map declaration at the top level in a separate edit if needed, 
+    // OR I can use a property on `handlePassiveMessage` itself to simulate static state.
+    if (!handlePassiveMessage.channelLastActive) {
+        handlePassiveMessage.channelLastActive = new Map();
+    }
+    const lastActiveTime = handlePassiveMessage.channelLastActive.get(contextId) || 0;
+    const nowTime = Date.now();
+    const isActiveMode = (nowTime - lastActiveTime) < (3 * 60 * 1000); // 3 minutes
+
     // Check if ANY message in the batch mentions the bot
     const botUser = lastMessage.client.user;
     const isMentioned = msgs.some(m =>
@@ -213,35 +233,44 @@ export async function handlePassiveMessage(messages) {
     );
 
     let forcedInstruction = "";
-    let debugRngInfo = "Mode: Active (Mentioned)";
+    let debugRngInfo = "";
 
-    if (!isMentioned) {
-        // RNG Logic
+    if (isMentioned) {
+        // Update Active Timestamp
+        handlePassiveMessage.channelLastActive.set(contextId, nowTime);
+        debugRngInfo = "Mode: Active (Mentioned)";
+        console.log("[Active Mode] Refreshed by Mention.");
+    } else if (isActiveMode) {
+        // ACTIVE MODE (Timer)
+        // Bypass RNG, but conditional response based on relevance logic
+        debugRngInfo = `Mode: Active (Timer) | ${(3 - (nowTime - lastActiveTime) / 60000).toFixed(1)}m left`;
+        forcedInstruction = "\n\n[SISTEMA]: MODO ACTIVO (Conversación fluida). El usuario te habló hace poco. Responde si el mensaje sigue el hilo o es relevante. Si cambia de tema a algo irrelevante, puedes ignorar (`send_text: false`).";
+        console.log(`[Active Mode] Timer Active. ${debugRngInfo}`);
+    } else {
+        // PASSIVE MODE (RNG)
         const roll = Math.random() * 100;
         let modeName = "Unknown";
 
         if (roll < 90) {
             // 90% Silent Mode (Process but don't output)
-            forcedInstruction = "\n\n[SISTEMA]: MODO SILENCIOSO. Solo procesa el contexto. 'send_text' DEBE ser false. 'reaction' DEBE ser null.";
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO SILENCIOSO. Solo procesa el contexto. Configura <SEND_TEXT> en FALSE. <REACTION> debe ser NULL.`;
             modeName = "Silent";
         } else if (roll < 96) {
             // 6% Emoji Only
-            forcedInstruction = "\n\n[SISTEMA]: REACCIÓN OBLIGATORIA. Tu respuesta TIENE QUE SER SOLO una reacción (campo 'reaction' con emoji). 'send_text' DEBE ser false. NO envíes texto.";
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. REACCIÓN OBLIGATORIA. Tu respuesta TIENE QUE SER SOLO una reacción (campo <REACTION> con emoji). <SEND_TEXT> debe ser FALSE. NO envíes texto.`;
             modeName = "Emoji Only";
         } else if (roll < 99) {
             // 3% Text Only
-            forcedInstruction = "\n\n[SISTEMA]: TEXTO OBLIGATORIO. Tu respuesta TIENE QUE SER SOLO texto. 'reaction' DEBE ser null.";
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. TEXTO OBLIGATORIO. Tu respuesta TIENE QUE SER SOLO texto. <REACTION> debe ser NULL.`;
             modeName = "Text Only";
         } else {
             // 1% Text + Emoji (Default behavior mostly, but forced)
-            forcedInstruction = "\n\n[SISTEMA]: TEXTO Y REACCIÓN OBLIGATORIOS. Tu respuesta DEBE tener texto Y reacción.";
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. TEXTO Y REACCIÓN OBLIGATORIOS. Tu respuesta DEBE tener texto Y reacción.`;
             modeName = "Text + Emoji";
         }
 
         debugRngInfo = `Mode: ${modeName} (Roll: ${roll.toFixed(2)}%)`;
         console.log(`[RNG] Triggered! ${debugRngInfo}`);
-    } else {
-        console.log("[RNG] Bypassed (Bot Mentioned)");
     }
 
     // Construct Context from Batch
@@ -253,18 +282,26 @@ export async function handlePassiveMessage(messages) {
         fullContent += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${msg.author.username}: ${msg.content}\n`;
     }
 
-    const JSON_OUTPUT_INSTRUCTION = `
-### FORMATO DE SALIDA (JSON OBLIGATORIO)
-Responde SIEMPRE con este JSON en una sola línea o bloque válido:
-{
-  "thought": "Breve análisis interno.",
-  "send_text": boolean,
-  "text_content": "String plano y corto sin simbolos raros (vacío si false)",
-  "reply_to": "message_id" (null o ID),
-  "reaction": "emoji" (o null)
-}`;
+    const OUTPUT_INSTRUCTION = `
+### FORMATO DE SALIDA (TAGS OBLIGATORIO) -- NO USES JSON
+Responde SIEMPRE usando estos tags exactos. No incluyas nada fuera de los tags.
+<THOUGHT>
+Breve análisis interno aquí.
+</THOUGHT>
+<SEND_TEXT>
+TRUE o FALSE
+</SEND_TEXT>
+<TEXT_CONTENT>
+Tu respuesta de texto aquí. Vacío si SEND_TEXT es FALSE.
+</TEXT_CONTENT>
+<REPLY_TO>
+ID del mensaje al que respondes o NULL
+</REPLY_TO>
+<REACTION>
+Emoji o NULL
+</REACTION>`;
 
-    fullContent += JSON_OUTPUT_INSTRUCTION;
+    fullContent += OUTPUT_INSTRUCTION;
     fullContent += forcedInstruction;
 
     // Log Prompt
@@ -289,9 +326,10 @@ Responde SIEMPRE con este JSON en una sola línea o bloque válido:
         if (!conversationId) {
             const agentId = await getOmniAgentId();
             // Start new conversation
+            // We treat the full constructed content (with tags instructions) as the user input
             const startParams = {
                 agentId: agentId,
-                inputs: [{ role: 'user', content: fullContent.trim() }]
+                inputs: [{ role: 'user', content: fullContent }]
             };
             const convoResponse = await client.beta.conversations.start(startParams);
             conversationId = convoResponse.conversationId || convoResponse.id;
@@ -302,103 +340,100 @@ Responde SIEMPRE con este JSON en una sola línea o bloque válido:
             const convoResponse = await client.beta.conversations.append({
                 conversationId: conversationId,
                 conversationAppendRequest: {
-                    inputs: [{ role: 'user', content: fullContent.trim() }]
+                    inputs: [{ role: 'user', content: fullContent }]
                 }
             });
             outputs = convoResponse.outputs;
         }
 
         // Parse Output
+        // The beta API returns 'outputs' array. We usually want the last one.
         if (outputs && outputs.length > 0) {
             const lastOutput = outputs[outputs.length - 1];
             let contentStr = "";
 
-            if (Array.isArray(lastOutput.content)) {
-                // Combine text parts
-                contentStr = lastOutput.content.filter(p => p.type === 'text').map(p => p.text).join("");
-            } else {
-                contentStr = lastOutput.content;
+            if (lastOutput.content) {
+                if (Array.isArray(lastOutput.content)) {
+                    // Combine text parts if it's an array
+                    contentStr = lastOutput.content
+                        .filter(p => p.type === 'text')
+                        .map(p => p.text)
+                        .join("");
+                } else if (typeof lastOutput.content === 'string') {
+                    contentStr = lastOutput.content;
+                }
             }
 
+            // Strip code blocks if AI wrapped it in ```xml ... ```
+            contentStr = contentStr.replace(/```xml/g, '').replace(/```/g, '').trim();
 
-            // Attempt JSON parse
-            // Remove markdown code blocks if present
-            contentStr = contentStr.replace(/```json/g, '').replace(/```/g, '').trim();
+            console.log("--- RAW RESPONSE ---");
+            console.log(contentStr);
+            console.log("--------------------");
 
-            const makeJSONSafe = (str) => {
-                let result = '';
-                let inString = false;
-                let escaped = false;
-
-                // 1. Fix BigInts (e.g. "reply_to": 1234567890123456789) -> "reply_to": "12345678..."
-                // Simple regex for likely field names. 
-                // Note: This is a simple heuristic, safer to do before the loop if the IDs are simple.
-                str = str.replace(/"reply_to"\s*:\s*(\d+)/g, '"reply_to": "$1"');
-
-                // 2. Escape newlines inside strings
-                for (let i = 0; i < str.length; i++) {
-                    const char = str[i];
-
-                    if (char === '"' && !escaped) {
-                        inString = !inString;
-                    }
-
-                    if (char === '\\' && !escaped) {
-                        escaped = true;
-                        result += char;
-                        continue;
-                    }
-
-                    if (inString && char === '\n') {
-                        result += '\\n';
-                    } else if (inString && char === '\r') {
-                        // ignore or handle
-                    } else {
-                        result += char;
-                    }
-
-                    escaped = false;
-                }
-                return result;
+            // PARSE TAGS using Regex
+            const extract = (tag) => {
+                const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\/${tag}>`, 'i');
+                const match = contentStr.match(regex);
+                return match ? match[1].trim() : null;
             };
 
-            contentStr = makeJSONSafe(contentStr);
+            const thought = extract('THOUGHT');
+            const sendTextRaw = extract('SEND_TEXT');
+            const textContent = extract('TEXT_CONTENT');
+            const replyToRaw = extract('REPLY_TO');
+            const reactionRaw = extract('REACTION');
 
-            try {
-                const response = JSON.parse(contentStr);
+            const parsedResponse = {
+                thought: thought || "",
+                send_text: sendTextRaw && sendTextRaw.toUpperCase().includes('TRUE'),
+                text_content: textContent || "",
+                reply_to: (replyToRaw && replyToRaw.toUpperCase() !== 'NULL') ? replyToRaw : null,
+                reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null
+            };
 
-                // Debug Mode
-                const isGlobalDebug = process.env.DEBUG_LUMI === 'true';
-                const isChannelDebug = debugChannels.has(contextId);
+            console.log("--- PARSED RESPONSE ---");
+            console.log(parsedResponse);
+            console.log("-----------------------");
 
-                if (isGlobalDebug) {
-                    console.log("[Lumi Debug JSON]:", JSON.stringify(response, null, 2));
+            outputs.push(parsedResponse);
+
+            // --- Process Parsed Output ---
+            for (const output of outputs) {
+
+                // Debug Mode Output (The "Thought" bubble)
+                if (debugChannels.has(contextId)) {
+                    // Reconstruct a visual blocks for debug
+                    const debugMsg = `**[DEBUG OUTPUT]**\n> **Thought**: ${output.thought}\n> **Send Text**: ${output.send_text}\n> **Reaction**: ${output.reaction}`;
+                    await lastMessage.channel.send(debugMsg);
                 }
 
-                if (isChannelDebug) {
-                    // Send JSON to channel (split if too long, though unlikely for this usage)
-                    const debugMsg = `\`\`\`json\n${JSON.stringify(response, null, 2)}\n\`\`\``;
-                    if (debugMsg.length <= 2000) {
-                        await lastMessage.channel.send(debugMsg);
-                    } else {
-                        await lastMessage.channel.send(debugMsg.slice(0, 2000)); // Truncate if huge
+                if (output.send_text && output.text_content) {
+                    // Send Typing
+                    await lastMessage.channel.sendTyping();
+
+                    // ... logic to send message ...
+                    const msgOptions = { content: output.text_content };
+                    if (output.reply_to) {
+                        msgOptions.reply = { messageReference: output.reply_to };
+                    }
+
+                    try {
+                        await lastMessage.channel.send(msgOptions);
+                    } catch (sendErr) {
+                        console.error("Failed to send message:", sendErr);
                     }
                 }
 
-                if (!isGlobalDebug && !isChannelDebug) {
-                    console.log("[Passive Analysis]", response.thought);
-                }
-
-                if (response.reaction) {
+                if (output.reaction) {
                     try {
-                        const targetId = response.reply_to || lastMessage.id; // Default to last message
-
                         // Support multiple reactions (e.g. "🎲⏳💀")
                         // Use Intl.Segmenter to properly split emojis (grapheme clusters)
                         const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-                        const reactions = Array.from(segmenter.segment(response.reaction)).map(s => s.segment);
+                        const reactions = Array.from(segmenter.segment(output.reaction)).map(s => s.segment);
 
-                        for (const reactionEmoji of reactions) {
+                        // Limit to first 3 to avoid spam if AI goes crazy
+                        for (const reactionEmoji of reactions.slice(0, 3)) {
                             try {
                                 await lastMessage.react(reactionEmoji);
                             } catch (e) {
@@ -409,54 +444,13 @@ Responde SIEMPRE con este JSON en una sola línea o bloque válido:
                         console.error(`Failed to process reactions:`, e.message);
                     }
                 }
+            } // End for
+        } // End if (outputs)
 
-                if (response.send_text === true) {
-                    // Send Typing
-                    await lastMessage.channel.sendTyping();
-
-                    const textToSend = response.text_content || "."; // Fallback to avoid empty message error
-
-                    // Logic: reply_to takes precedence.
-                    if (response.reply_to) {
-                        try {
-                            const targetMsg = await lastMessage.channel.messages.fetch(response.reply_to);
-                            await targetMsg.reply(textToSend);
-                        } catch (fetchErr) {
-                            console.warn(`Could not fetch reply_to message ${response.reply_to}:`, fetchErr.message);
-                            // Fallback to channel send if target missing
-                            await lastMessage.channel.send(textToSend);
-                        }
-                    } else {
-                        // Normal message to channel
-                        await lastMessage.channel.send(textToSend);
-                    }
-                }
-
-            } catch (jsonError) {
-                console.error("Failed to parse JSON response from Agent:", contentStr);
-
-                // Debug Mode Error Reporting
-                const isChannelDebug = debugChannels.has(contextId);
-                if (isChannelDebug) {
-                    const errorMsg = `**JSON Parse Error**: ${jsonError.message}\n\`\`\`\n${contentStr}\n\`\`\``;
-                    // Split if somehow too huge (though contentStr is likely < 2000 if it was a single response, but safe to check)
-                    if (errorMsg.length <= 2000) {
-                        await lastMessage.channel.send(errorMsg);
-                    } else {
-                        // Very basic splitting for debug purposes
-                        await lastMessage.channel.send(`**JSON Parse Error**: ${jsonError.message}`);
-                        await lastMessage.channel.send(errorMsg.slice(errorMsg.indexOf('```'), 2000));
-                    }
-                }
-            }    // Optionally: log to a file or just ignore. 
-            // If it fails to parse, we probably shouldn't spam the channel.
-        }
-
-
-    } catch (error) {
-        console.error('Error in passive chat:', error);
-        if (error.message && error.message.includes("404")) {
-            deleteConversationId(contextId);
+    } catch (error) { // End try
+        console.error("Error calling Mistral:", error);
+        if (debugChannels.has(contextId)) {
+            await lastMessage.channel.send(`**Error**: ${error.message}`);
         }
     }
 }
