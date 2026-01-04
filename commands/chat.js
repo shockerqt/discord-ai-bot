@@ -199,41 +199,40 @@ export async function handlePassiveMessage(messages) {
 
     // Construct Context from Batch
     const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Argentina/Buenos_Aires' });
-    let fullContent = "";
-
-    // Fetch History (Last 10 messages)
-    try {
-        const historyMessages = await lastMessage.channel.messages.fetch({ limit: 10 });
-        // This includes current messages probably, so we filter.
-        const historyArray = Array.from(historyMessages.values()).reverse();
-
-        // Filter out messages that are in the current batch (msgs) to avoid sub-duplication
-        const batchIds = new Set(msgs.map(m => m.id));
-        const previousMessages = historyArray.filter(m => !batchIds.has(m.id));
-
-        if (previousMessages.length > 0) {
-            fullContent += "--- PREVIOUS MESSAGES ---\n";
-            for (const hMsg of previousMessages) {
-                if (hMsg.content) {
-                    const hTime = new Date(hMsg.createdTimestamp).toLocaleString('es-ES', { timeZone: 'America/Argentina/Buenos_Aires' });
-                    fullContent += `[${hTime}] (ID: ${hMsg.id}) (UID: ${hMsg.author.id}) ${hMsg.author.username}: ${hMsg.content}\n`;
-                }
-            }
-            fullContent += "--- CURRENT MESSAGES ---\n";
-        }
-    } catch (err) {
-        console.error("Error fetching history:", err.message);
-    }
+    let fullContent = "--- CURRENT MESSAGES ---\n";
 
     // Append batch messages line by line
     for (const msg of msgs) {
         fullContent += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${msg.author.username}: ${msg.content}\n`;
     }
 
+    const JSON_OUTPUT_INSTRUCTION = `
+### FORMATO DE SALIDA (JSON OBLIGATORIO)
+Responde SIEMPRE con este JSON en una sola línea o bloque válido:
+{
+  "thought": "Breve análisis interno.",
+  "send_text": boolean,
+  "text_content": "String plano y corto sin simbolos raros (vacío si false)",
+  "reply_to": "message_id" (null o ID),
+  "reaction": "emoji" (o null)
+}`;
+
+    fullContent += JSON_OUTPUT_INSTRUCTION;
+
     // Log Prompt
     console.log("--- PROMPT SENT TO AGENT ---");
     console.log(fullContent);
     console.log("----------------------------");
+
+    // Debug: Echo Input to Chat
+    if (debugChannels.has(contextId)) {
+        const debugInputMsg = `**[DEBUG INPUT]**\n\`\`\`\n${fullContent}\n\`\`\``;
+        if (debugInputMsg.length <= 2000) {
+            await lastMessage.channel.send(debugInputMsg);
+        } else {
+            await lastMessage.channel.send(`**[DEBUG INPUT]** (Truncated)\n\`\`\`\n${fullContent.slice(0, 1950)}\n\`\`\``);
+        }
+    }
 
     try {
         let conversationId = getConversationId(contextId);
