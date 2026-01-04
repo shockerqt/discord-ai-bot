@@ -7,186 +7,8 @@ import { debugChannels } from './debug.js';
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 
-export const data = {
-    name: 'chat',
-    description: 'Chat with Mistral AI (shared context)',
-    options: [
-        {
-            type: 3, // STRING
-            name: 'message',
-            description: 'The message to send',
-            required: true,
-        }
-    ],
-    type: 1, // CHAT_INPUT
-    integration_types: [0, 1],
-    contexts: [0, 1, 2],
-};
+// Slash command removed. This module now only handles passive messages.
 
-export async function execute(req, res) {
-    const { data, token, application_id, channel_id, member, user } = req.body;
-    // Use channel_id for context. If DM, channel_id works fine too.
-    const contextId = channel_id;
-
-    // User message
-    const userMessage = data.options.find(opt => opt.name === 'message').value;
-    const authorUsername = member ? member.user.username : user.username;
-
-    // We defer first
-    await res.send({
-        type: 5, // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
-    });
-
-    try {
-        const payloads = await getChatResponse(userMessage, contextId, authorUsername);
-        await sendPayloads(application_id, token, payloads);
-    } catch (error) {
-        console.error('Error in chat:', error);
-        if (error.message && error.message.includes("404")) {
-            // Already handled in getChatResponse but good to be safe if reused outside
-        }
-
-        const endpoint = `webhooks/${application_id}/${token}/messages/@original`;
-        await DiscordRequest(endpoint, {
-            method: 'PATCH',
-            body: {
-                content: `Sorry, I met an error. (Conversation might be reset). Error: ${error.message}`,
-            },
-        });
-    }
-}
-
-export async function getChatResponse(userMessage, contextId, authorUsername) {
-    try {
-        let conversationId = getConversationId(contextId);
-        console.log(`[DEBUG] Channel: ${contextId}, Found ConvID: ${conversationId}`);
-
-        // Helper function
-        const processOutputs = async (outputs) => {
-            const payloads = []; // Array of { content: string, embeds: [] }
-            let currentText = `> ${userMessage}\n\n`;
-            let currentEmbeds = [];
-
-            // Helper to flush current buffer
-            const flush = () => {
-                if (!currentText.trim() && currentEmbeds.length === 0) return;
-
-                // Split long messages
-                while (currentText.length > 2000) {
-                    let splitIndex = currentText.lastIndexOf(' ', 2000);
-                    if (splitIndex === -1) splitIndex = 2000;
-
-                    payloads.push({ content: currentText.slice(0, splitIndex), embeds: [] });
-                    currentText = currentText.slice(splitIndex);
-                }
-
-                if (currentText.trim() || currentEmbeds.length > 0) {
-                    payloads.push({ content: currentText, embeds: [...currentEmbeds] });
-                }
-                currentText = "";
-                currentEmbeds = [];
-            }
-
-            if (outputs && outputs.length > 0) {
-                const lastOutput = outputs[outputs.length - 1];
-                if (lastOutput.type === 'message.output' || lastOutput.role === 'assistant') {
-                    if (Array.isArray(lastOutput.content)) {
-                        for (const part of lastOutput.content) {
-                            if (part.type === 'text') {
-                                currentText += part.text;
-                            } else if (part.type === 'image_url') {
-                                currentEmbeds.push({ image: { url: part.image_url.url } });
-                                flush(); // Interleave: flush text + this image
-                            } else if (part.type === 'tool_file') {
-                                try {
-                                    // Mistral SDK expects camelCase 'fileId'
-                                    const urlResponse = await client.files.getSignedUrl({ fileId: part.fileId });
-                                    if (urlResponse && urlResponse.url) {
-                                        currentEmbeds.push({
-                                            image: { url: urlResponse.url },
-                                            footer: { text: "dibujado por la gran Lumi" }
-                                        });
-                                        flush(); // Interleave: flush text + this image
-                                    } else {
-                                        currentText += `\n[Image generated but URL could not be retrieved: ${part.fileName}]`;
-                                    }
-                                } catch (err) {
-                                    console.error("Error getting signed url:", err);
-                                    currentText += `\n[Error retrieving image: ${part.fileName}]`;
-                                }
-                            }
-                        }
-                    } else {
-                        currentText += lastOutput.content;
-                    }
-                }
-            }
-
-            // Flush remaining text
-            flush();
-            return payloads;
-        };
-
-
-        if (!conversationId) {
-            // Start new conversation
-            const agentId = await getOmniAgentId();
-            const startParams = {
-                agentId: agentId,
-                inputs: [{ role: 'user', content: `${authorUsername}: ${userMessage}` }]
-            };
-
-            const convoResponse = await client.beta.conversations.start(startParams);
-
-            // API returns conversationId (not id)
-            conversationId = convoResponse.conversationId || convoResponse.id;
-            setConversationId(contextId, conversationId);
-
-            const startPayloads = await processOutputs(convoResponse.outputs);
-
-            if (startPayloads.length === 0) {
-                // Fallback
-                startPayloads.push({ content: "I'm not sure how to respond to that." });
-            }
-
-            return startPayloads;
-
-        } else {
-            // Append
-            const convoResponse = await client.beta.conversations.append({
-                conversationId: conversationId,
-                conversationAppendRequest: {
-                    inputs: [{ role: 'user', content: `${authorUsername}: ${userMessage}` }]
-                }
-            });
-
-            const appendPayloads = await processOutputs(convoResponse.outputs);
-            if (appendPayloads.length === 0) {
-                appendPayloads.push({ content: "I'm not sure how to respond." });
-            }
-
-            return appendPayloads;
-        }
-
-    } catch (error) {
-        console.error('Error in chat:', error);
-        if (error.message && error.message.includes("404")) {
-            deleteConversationId(contextId); // Assuming deleteConversationId is imported, but it's not. 
-            // Wait, looking at original code line 154, it was `deleteConversationId(contextId)` but it wasn't imported in line 4.
-            // Wait, let me check imports.
-            // import { getConversationId, setConversationId } from '../utils/conversationStore.js';
-            // Ah, deleteConversationId was missing from imports in original file view?
-            // Let me check my previous file view.
-            // Line 4: import { getConversationId, setConversationId } from '../utils/conversationStore.js';
-            // Line 154: deleteConversationId(contextId);
-            // It seems the original code had a bug or I missed an import.
-            // I should attempt to fix this or import it if I can.
-            // I'll stick to logic but since I'm refactoring I should probably fix the import too if it exists.
-            // For now, I'll allow the error to bubble up or rethrow.
-        }
-        throw error;
-    }
-}
 
 // Helper to send interleaved messages
 export async function handlePassiveMessage(messages) {
@@ -301,21 +123,23 @@ ID del mensaje al que respondes o NULL
 Emoji o NULL
 </REACTION>`;
 
-    fullContent += OUTPUT_INSTRUCTION;
-    fullContent += forcedInstruction;
+    // Split Content: System (Instructions) vs User (Chat Log)
+    const systemContent = OUTPUT_INSTRUCTION + forcedInstruction;
+    const userContent = fullContent; // fullContent currently has "--- CURRENT MESSAGES ---\n..."
 
-    // Log Prompt
+    // Log Prompt (Debug)
     console.log("--- PROMPT SENT TO AGENT ---");
-    console.log(fullContent);
+    console.log("[SYSTEM]:", systemContent);
+    console.log("[USER Start]:", userContent.slice(0, 100) + "...");
     console.log("----------------------------");
 
     // Debug: Echo Input to Chat
     if (debugChannels.has(contextId)) {
-        const debugInputMsg = `**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n\`\`\`\n${fullContent}\n\`\`\``;
+        const debugInputMsg = `**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n\`\`\`\n[SYSTEM]\n${systemContent.slice(0, 500)}...\n\n[USER]\n${userContent}\n\`\`\``;
         if (debugInputMsg.length <= 2000) {
             await lastMessage.channel.send(debugInputMsg);
         } else {
-            await lastMessage.channel.send(`**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n(Truncated)\n\`\`\`\n${fullContent.slice(0, 1900)}\n\`\`\``);
+            await lastMessage.channel.send(`**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n(Truncated)\n\`\`\`\n[USER]\n${userContent.slice(0, 1900)}\n\`\`\``);
         }
     }
 
@@ -326,10 +150,12 @@ Emoji o NULL
         if (!conversationId) {
             const agentId = await getOmniAgentId();
             // Start new conversation
-            // We treat the full constructed content (with tags instructions) as the user input
             const startParams = {
                 agentId: agentId,
-                inputs: [{ role: 'user', content: fullContent }]
+                inputs: [
+                    { role: 'system', content: systemContent },
+                    { role: 'user', content: userContent }
+                ]
             };
             const convoResponse = await client.beta.conversations.start(startParams);
             conversationId = convoResponse.conversationId || convoResponse.id;
@@ -337,10 +163,14 @@ Emoji o NULL
             outputs = convoResponse.outputs;
         } else {
             // Append
+            // We append both System (as ephemeral instruction for this turn) and User
             const convoResponse = await client.beta.conversations.append({
                 conversationId: conversationId,
                 conversationAppendRequest: {
-                    inputs: [{ role: 'user', content: fullContent }]
+                    inputs: [
+                        { role: 'system', content: systemContent },
+                        { role: 'user', content: userContent }
+                    ]
                 }
             });
             outputs = convoResponse.outputs;
