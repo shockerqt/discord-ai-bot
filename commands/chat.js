@@ -197,8 +197,55 @@ export async function handlePassiveMessage(messages) {
     const lastMessage = msgs[msgs.length - 1]; // Use last message for context ID, channel, author(if needed generic)
     const contextId = lastMessage.channel.id;
 
+    // Check for mentions to bypass RNG
+    const botId = client.user?.id; // Need to ensure client is imported or accessible. 
+    // Wait, 'client' is not imported in chat.js? 
+    // chat.js imports Mistral client as 'client'. DISCORD client is passed in req? No.
+    // handlePassiveMessage receives 'messages' (Discord Message objects).
+    // messsage.mentions.users.has(botId)
+    // We can get botId from the message.client.user.id
+
+    // Check if ANY message in the batch mentions the bot
+    const botUser = lastMessage.client.user;
+    const isMentioned = msgs.some(m =>
+        m.mentions.users.has(botUser.id) ||
+        /^lumi\b/i.test(m.content.trim())
+    );
+
+    let forcedInstruction = "";
+    let debugRngInfo = "Mode: Active (Mentioned)";
+
+    if (!isMentioned) {
+        // RNG Logic
+        const roll = Math.random() * 100;
+        let modeName = "Unknown";
+
+        if (roll < 90) {
+            // 90% Silent Mode (Process but don't output)
+            forcedInstruction = "\n\n[SISTEMA]: MODO SILENCIOSO. Solo procesa el contexto. 'send_text' DEBE ser false. 'reaction' DEBE ser null.";
+            modeName = "Silent";
+        } else if (roll < 96) {
+            // 6% Emoji Only
+            forcedInstruction = "\n\n[SISTEMA]: REACCIÓN OBLIGATORIA. Tu respuesta TIENE QUE SER SOLO una reacción (campo 'reaction' con emoji). 'send_text' DEBE ser false. NO envíes texto.";
+            modeName = "Emoji Only";
+        } else if (roll < 99) {
+            // 3% Text Only
+            forcedInstruction = "\n\n[SISTEMA]: TEXTO OBLIGATORIO. Tu respuesta TIENE QUE SER SOLO texto. 'reaction' DEBE ser null.";
+            modeName = "Text Only";
+        } else {
+            // 1% Text + Emoji (Default behavior mostly, but forced)
+            forcedInstruction = "\n\n[SISTEMA]: TEXTO Y REACCIÓN OBLIGATORIOS. Tu respuesta DEBE tener texto Y reacción.";
+            modeName = "Text + Emoji";
+        }
+
+        debugRngInfo = `Mode: ${modeName} (Roll: ${roll.toFixed(2)}%)`;
+        console.log(`[RNG] Triggered! ${debugRngInfo}`);
+    } else {
+        console.log("[RNG] Bypassed (Bot Mentioned)");
+    }
+
     // Construct Context from Batch
-    const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Argentina/Buenos_Aires' });
+    const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' });
     let fullContent = "--- CURRENT MESSAGES ---\n";
 
     // Append batch messages line by line
@@ -218,6 +265,7 @@ Responde SIEMPRE con este JSON en una sola línea o bloque válido:
 }`;
 
     fullContent += JSON_OUTPUT_INSTRUCTION;
+    fullContent += forcedInstruction;
 
     // Log Prompt
     console.log("--- PROMPT SENT TO AGENT ---");
@@ -226,11 +274,11 @@ Responde SIEMPRE con este JSON en una sola línea o bloque válido:
 
     // Debug: Echo Input to Chat
     if (debugChannels.has(contextId)) {
-        const debugInputMsg = `**[DEBUG INPUT]**\n\`\`\`\n${fullContent}\n\`\`\``;
+        const debugInputMsg = `**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n\`\`\`\n${fullContent}\n\`\`\``;
         if (debugInputMsg.length <= 2000) {
             await lastMessage.channel.send(debugInputMsg);
         } else {
-            await lastMessage.channel.send(`**[DEBUG INPUT]** (Truncated)\n\`\`\`\n${fullContent.slice(0, 1950)}\n\`\`\``);
+            await lastMessage.channel.send(`**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n(Truncated)\n\`\`\`\n${fullContent.slice(0, 1900)}\n\`\`\``);
         }
     }
 
