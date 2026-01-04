@@ -278,6 +278,45 @@ export async function handlePassiveMessage(messages) {
             // Remove markdown code blocks if present
             contentStr = contentStr.replace(/```json/g, '').replace(/```/g, '').trim();
 
+            const makeJSONSafe = (str) => {
+                let result = '';
+                let inString = false;
+                let escaped = false;
+
+                // 1. Fix BigInts (e.g. "reply_to": 1234567890123456789) -> "reply_to": "12345678..."
+                // Simple regex for likely field names. 
+                // Note: This is a simple heuristic, safer to do before the loop if the IDs are simple.
+                str = str.replace(/"reply_to"\s*:\s*(\d+)/g, '"reply_to": "$1"');
+
+                // 2. Escape newlines inside strings
+                for (let i = 0; i < str.length; i++) {
+                    const char = str[i];
+
+                    if (char === '"' && !escaped) {
+                        inString = !inString;
+                    }
+
+                    if (char === '\\' && !escaped) {
+                        escaped = true;
+                        result += char;
+                        continue;
+                    }
+
+                    if (inString && char === '\n') {
+                        result += '\\n';
+                    } else if (inString && char === '\r') {
+                        // ignore or handle
+                    } else {
+                        result += char;
+                    }
+
+                    escaped = false;
+                }
+                return result;
+            };
+
+            contentStr = makeJSONSafe(contentStr);
+
             try {
                 const response = JSON.parse(contentStr);
 
@@ -306,12 +345,21 @@ export async function handlePassiveMessage(messages) {
                 if (response.reaction) {
                     try {
                         const targetId = response.reply_to || lastMessage.id; // Default to last message
-                        // Logic mostly implies reacting to the trigger (last message usually) or specific if reply_to matches input
-                        // We will react to the last message of the batch as it's the most "current" trigger.
-                        // Or iterate? No, single reaction from agent.
-                        await lastMessage.react(response.reaction);
+
+                        // Support multiple reactions (e.g. "🎲⏳💀")
+                        // Use Intl.Segmenter to properly split emojis (grapheme clusters)
+                        const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+                        const reactions = Array.from(segmenter.segment(response.reaction)).map(s => s.segment);
+
+                        for (const reactionEmoji of reactions) {
+                            try {
+                                await lastMessage.react(reactionEmoji);
+                            } catch (e) {
+                                console.error(`Failed to react with ${reactionEmoji}:`, e.message);
+                            }
+                        }
                     } catch (e) {
-                        console.error(`Failed to react with ${response.reaction}:`, e.message);
+                        console.error(`Failed to process reactions:`, e.message);
                     }
                 }
 
@@ -339,6 +387,20 @@ export async function handlePassiveMessage(messages) {
 
             } catch (jsonError) {
                 console.error("Failed to parse JSON response from Agent:", contentStr);
+
+                // Debug Mode Error Reporting
+                const isChannelDebug = debugChannels.has(contextId);
+                if (isChannelDebug) {
+                    const errorMsg = `**JSON Parse Error**: ${jsonError.message}\n\`\`\`\n${contentStr}\n\`\`\``;
+                    // Split if somehow too huge (though contentStr is likely < 2000 if it was a single response, but safe to check)
+                    if (errorMsg.length <= 2000) {
+                        await lastMessage.channel.send(errorMsg);
+                    } else {
+                        // Very basic splitting for debug purposes
+                        await lastMessage.channel.send(`**JSON Parse Error**: ${jsonError.message}`);
+                        await lastMessage.channel.send(errorMsg.slice(errorMsg.indexOf('```'), 2000));
+                    }
+                }
             }    // Optionally: log to a file or just ignore. 
             // If it fails to parse, we probably shouldn't spam the channel.
         }
