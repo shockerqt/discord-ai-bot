@@ -1,7 +1,7 @@
 import { InteractionResponseType } from 'discord-interactions';
 import { DiscordRequest } from '../utils.js';
 import { Mistral } from '@mistralai/mistralai';
-import { getConversationId, setConversationId } from '../utils/conversationStore.js';
+import { getConversationId, setConversationId, deleteConversationId } from '../utils/conversationStore.js';
 import { getOmniAgentId } from '../utils/agentManager.js';
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
@@ -37,6 +37,26 @@ export async function execute(req, res) {
     });
 
     try {
+        const payloads = await getChatResponse(userMessage, contextId, authorUsername);
+        await sendPayloads(application_id, token, payloads);
+    } catch (error) {
+        console.error('Error in chat:', error);
+        if (error.message && error.message.includes("404")) {
+            // Already handled in getChatResponse but good to be safe if reused outside
+        }
+
+        const endpoint = `webhooks/${application_id}/${token}/messages/@original`;
+        await DiscordRequest(endpoint, {
+            method: 'PATCH',
+            body: {
+                content: `Sorry, I met an error. (Conversation might be reset). Error: ${error.message}`,
+            },
+        });
+    }
+}
+
+export async function getChatResponse(userMessage, contextId, authorUsername) {
+    try {
         let conversationId = getConversationId(contextId);
         console.log(`[DEBUG] Channel: ${contextId}, Found ConvID: ${conversationId}`);
 
@@ -50,6 +70,7 @@ export async function execute(req, res) {
             const flush = () => {
                 if (!currentText.trim() && currentEmbeds.length === 0) return;
 
+                // Split long messages
                 while (currentText.length > 2000) {
                     let splitIndex = currentText.lastIndexOf(' ', 2000);
                     if (splitIndex === -1) splitIndex = 2000;
@@ -127,9 +148,7 @@ export async function execute(req, res) {
                 startPayloads.push({ content: "I'm not sure how to respond to that." });
             }
 
-            // Send first payload as PATCH (edit original deferred)
-            // Send rest as POST (follow-up)
-            await sendPayloads(application_id, token, startPayloads);
+            return startPayloads;
 
         } else {
             // Append
@@ -145,22 +164,26 @@ export async function execute(req, res) {
                 appendPayloads.push({ content: "I'm not sure how to respond." });
             }
 
-            await sendPayloads(application_id, token, appendPayloads);
+            return appendPayloads;
         }
 
     } catch (error) {
         console.error('Error in chat:', error);
         if (error.message && error.message.includes("404")) {
-            deleteConversationId(contextId);
+            deleteConversationId(contextId); // Assuming deleteConversationId is imported, but it's not. 
+            // Wait, looking at original code line 154, it was `deleteConversationId(contextId)` but it wasn't imported in line 4.
+            // Wait, let me check imports.
+            // import { getConversationId, setConversationId } from '../utils/conversationStore.js';
+            // Ah, deleteConversationId was missing from imports in original file view?
+            // Let me check my previous file view.
+            // Line 4: import { getConversationId, setConversationId } from '../utils/conversationStore.js';
+            // Line 154: deleteConversationId(contextId);
+            // It seems the original code had a bug or I missed an import.
+            // I should attempt to fix this or import it if I can.
+            // I'll stick to logic but since I'm refactoring I should probably fix the import too if it exists.
+            // For now, I'll allow the error to bubble up or rethrow.
         }
-
-        const endpoint = `webhooks/${application_id}/${token}/messages/@original`;
-        await DiscordRequest(endpoint, {
-            method: 'PATCH',
-            body: {
-                content: `Sorry, I met an error. (Conversation might be reset). Error: ${error.message}`,
-            },
-        });
+        throw error;
     }
 }
 
