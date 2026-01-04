@@ -110,7 +110,12 @@ export async function handlePassiveMessage(messages) {
 ### FORMATO DE SALIDA (TAGS OBLIGATORIO) -- NO USES JSON
 Responde SIEMPRE usando estos tags exactos. No incluyas nada fuera de los tags.
 <THOUGHT>
-Analiza la situacion paso a paso. Explayate todo lo necesario para razonar la respuesta correcta.
+This is your inner monologue. Think freely and causually about the situation, the user's message, and the context (including your personality and current mood logic).
+Draft your thoughts here. You can be verbose.
+Finally, determine:
+1. Is this relevant to me?
+2. Should I reply? (Active Mode vs Passive RNG rules)
+3. If responding, what is the best tone?
 </THOUGHT>
 <SEND_TEXT>
 TRUE o FALSE
@@ -125,8 +130,9 @@ ID del mensaje al que respondes o NULL
 Emoji o NULL
 </REACTION>`;
 
-    fullContent += OUTPUT_INSTRUCTION;
+    // REORDER: System/Context instructions FIRST, then Format instructions.
     fullContent += forcedInstruction;
+    fullContent += OUTPUT_INSTRUCTION;
 
     // Log Prompt
     console.log("--- PROMPT SENT TO AGENT ---");
