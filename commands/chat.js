@@ -103,6 +103,7 @@ export async function handlePassiveMessage(messages) {
 Responde SIEMPRE usando estos tags exactos. No incluyas nada fuera de los tags.
 <THOUGHT>
 This is your inner monologue. Use it to "Think out loud" (Chain of Thought).
+0. **Analyze Current Mode**: Read system instructions. Am I in Silent (no text), Free (text allowed), or Active Mode. What are my constraints?
 1. **Analyze Intent**: What does the user want? Is it a question, a statement, or just noise?
 2. **Context & Relevance**: Is this addressed to me (Lumi)? Should I intervene based on the current mode (Active/Passive)?
 3. **Drafting**: Formulate the best possible response. 
