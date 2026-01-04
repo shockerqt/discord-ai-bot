@@ -134,7 +134,7 @@ Emoji o NULL
     // Debug: Echo Input to Chat
     if (debugChannels.has(contextId)) {
         const debugInputContent = `RNG: ${debugRngInfo}\n\n${fullContent}`;
-        const buffer = Buffer.from(debugInputContent, 'utf-8');
+        const buffer = Buffer.from('\uFEFF' + debugInputContent, 'utf-8');
         try {
             await lastMessage.channel.send({
                 content: `**[DEBUG INPUT]**`,
@@ -233,26 +233,10 @@ Emoji o NULL
                 const debugContent = `
 RNG INFO: ${debugRngInfo}
 
-<THOUGHT>
-${output.thought}
-</THOUGHT>
-
-<SEND_TEXT>
-${output.send_text}
-</SEND_TEXT>
-
-<TEXT_CONTENT>
-${output.text_content}
-</TEXT_CONTENT>
-
-<REACTION>
-${output.reaction}
-</REACTION>
-
 --- COMPLETE RAW XML ---
 ${contentStr}
 `;
-                const buffer = Buffer.from(debugContent, 'utf-8');
+                const buffer = Buffer.from('\uFEFF' + debugContent, 'utf-8');
                 try {
                     await lastMessage.channel.send({
                         content: `**[DEBUG OUTPUT]**`,
