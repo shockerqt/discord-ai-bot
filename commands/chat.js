@@ -108,7 +108,7 @@ export async function handlePassiveMessage(messages) {
 ### FORMATO DE SALIDA (TAGS OBLIGATORIO) -- NO USES JSON
 Responde SIEMPRE usando estos tags exactos. No incluyas nada fuera de los tags.
 <THOUGHT>
-Breve análisis interno aquí.
+Analiza la situacion paso a paso. Explayate todo lo necesario para razonar la respuesta correcta.
 </THOUGHT>
 <SEND_TEXT>
 TRUE o FALSE
@@ -133,11 +133,18 @@ Emoji o NULL
 
     // Debug: Echo Input to Chat
     if (debugChannels.has(contextId)) {
-        const debugInputMsg = `**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n\`\`\`\n${fullContent}\n\`\`\``;
-        if (debugInputMsg.length <= 2000) {
-            await lastMessage.channel.send(debugInputMsg);
-        } else {
-            await lastMessage.channel.send(`**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n(Truncated)\n\`\`\`\n${fullContent.slice(0, 1900)}\n\`\`\``);
+        const debugInputContent = `RNG: ${debugRngInfo}\n\n${fullContent}`;
+        const buffer = Buffer.from(debugInputContent, 'utf-8');
+        try {
+            await lastMessage.channel.send({
+                content: `**[DEBUG INPUT]**`,
+                files: [{
+                    attachment: buffer,
+                    name: `debug-input-${Date.now()}.txt`
+                }]
+            });
+        } catch (err) {
+            console.error("Failed to send debug input attachment:", err);
         }
     }
 
@@ -242,7 +249,7 @@ ${output.text_content}
 ${output.reaction}
 </REACTION>
 
---- RAW RESPONSE ---
+--- COMPLETE RAW XML ---
 ${contentStr}
 `;
                 const buffer = Buffer.from(debugContent, 'utf-8');
