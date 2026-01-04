@@ -75,22 +75,14 @@ export async function handlePassiveMessage(messages) {
         const roll = Math.random() * 100;
         let modeName = "Unknown";
 
-        if (roll < 90) {
-            // 90% Silent Mode (Process but don't output)
-            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO SILENCIOSO. Solo procesa el contexto. Configura <SEND_TEXT> en FALSE. <REACTION> debe ser NULL.`;
+        if (roll < 95) {
+            // 95% Silent Mode
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO SILENCIOSO. Solo procesa el contexto. Configura <SEND_TEXT> en FALSE. <REACTION> permitida SOLO si es estrictamente necesario (evita el spam, verifica si ya reaccionaste antes).`;
             modeName = "Silent";
-        } else if (roll < 96) {
-            // 6% Emoji Only
-            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. REACCIÓN OBLIGATORIA. Tu respuesta TIENE QUE SER SOLO una reacción (campo <REACTION> con emoji). <SEND_TEXT> debe ser FALSE. NO envíes texto.`;
-            modeName = "Emoji Only";
-        } else if (roll < 99) {
-            // 3% Text Only
-            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. TEXTO OBLIGATORIO. Tu respuesta TIENE QUE SER SOLO texto. <REACTION> debe ser NULL.`;
-            modeName = "Text Only";
         } else {
-            // 1% Text + Emoji (Default behavior mostly, but forced)
-            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. TEXTO Y REACCIÓN OBLIGATORIOS. Tu respuesta DEBE tener texto Y reacción.`;
-            modeName = "Text + Emoji";
+            // 5% Text Mode (Replaces Text Only / Text + Emoji)
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO TEXTO. Tienes permiso para hablar (<SEND_TEXT>: TRUE) si el contexto lo amerita.`;
+            modeName = "Text Enabled";
         }
 
         debugRngInfo = `Mode: ${modeName} (Roll: ${roll.toFixed(2)}%)`;
