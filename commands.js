@@ -6,6 +6,8 @@ import * as resetCommand from './commands/reset.js';
 import * as memoryCommand from './commands/memory.js';
 import * as configureCommand from './commands/configure.js';
 import * as pingCommand from './commands/ping.js';
+import * as joinCommand from './commands/join.js';
+import * as leaveCommand from './commands/leave.js';
 
 // Aggregate all commands
 const ALL_COMMANDS = [
@@ -15,6 +17,8 @@ const ALL_COMMANDS = [
   configureCommand.data,
   memoryCommand.MEMORY_COMMAND,
   pingCommand.data,
+  joinCommand.data,
+  leaveCommand.data,
 ];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
