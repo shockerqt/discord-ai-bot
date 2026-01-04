@@ -188,31 +188,123 @@ export async function getChatResponse(userMessage, contextId, authorUsername) {
 }
 
 // Helper to send interleaved messages
-async function sendPayloads(appId, token, payloads) {
-    // 1. Edit original message with first payload
-    if (payloads.length > 0) {
-        const first = payloads[0];
-        const endpoint = `webhooks/${appId}/${token}/messages/@original`;
-        await DiscordRequest(endpoint, {
-            method: 'PATCH',
-            body: {
-                content: first.content,
-                embeds: first.embeds && first.embeds.length > 0 ? first.embeds : undefined,
-            },
-        });
-    }
+export async function handlePassiveMessage(message) {
+    const userMessage = message.content;
+    const authorUsername = message.author.username;
+    const contextId = message.channel.id;
 
-    // 2. Send follow-ups
-    for (let i = 1; i < payloads.length; i++) {
-        const payload = payloads[i];
-        // POST /webhooks/{application_id}/{interaction_token}
-        const endpoint = `webhooks/${appId}/${token}`;
-        await DiscordRequest(endpoint, {
-            method: 'POST',
-            body: {
-                content: payload.content,
-                embeds: payload.embeds && payload.embeds.length > 0 ? payload.embeds : undefined,
-            },
-        });
+    // Combine user message with instruction
+    // User managed instructions on Agent side
+    // Add Timestamp and ID and User ID
+    const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Argentina/Buenos_Aires' });
+    const fullContent = `[${now}] (ID: ${message.id}) (UID: ${message.author.id}) ${authorUsername}: ${userMessage}`;
+
+    try {
+        let conversationId = getConversationId(contextId);
+        let outputs = [];
+
+        if (!conversationId) {
+            const agentId = await getOmniAgentId();
+            // Start new conversation
+            const startParams = {
+                agentId: agentId,
+                inputs: [{ role: 'user', content: fullContent }]
+            };
+            const convoResponse = await client.beta.conversations.start(startParams);
+            conversationId = convoResponse.conversationId || convoResponse.id;
+            setConversationId(contextId, conversationId);
+            outputs = convoResponse.outputs;
+        } else {
+            // Append
+            const convoResponse = await client.beta.conversations.append({
+                conversationId: conversationId,
+                conversationAppendRequest: {
+                    inputs: [{ role: 'user', content: fullContent }]
+                }
+            });
+            outputs = convoResponse.outputs;
+        }
+
+        // Parse Output
+        if (outputs && outputs.length > 0) {
+            const lastOutput = outputs[outputs.length - 1];
+            let contentStr = "";
+
+            if (Array.isArray(lastOutput.content)) {
+                // Combine text parts
+                contentStr = lastOutput.content.filter(p => p.type === 'text').map(p => p.text).join("");
+            } else {
+                contentStr = lastOutput.content;
+            }
+
+
+            // Attempt JSON parse
+            // Remove markdown code blocks if present
+            contentStr = contentStr.replace(/```json/g, '').replace(/```/g, '').trim();
+
+            try {
+                const response = JSON.parse(contentStr);
+
+                // Debug Mode
+                if (process.env.DEBUG_LUMI === 'true') {
+                    console.log("[Lumi Debug JSON]:", JSON.stringify(response, null, 2));
+                    // Send JSON to channel (split if too long, though unlikely for this usage)
+                    const debugMsg = `\`\`\`json\n${JSON.stringify(response, null, 2)}\n\`\`\``;
+                    if (debugMsg.length <= 2000) {
+                        await message.channel.send(debugMsg);
+                    } else {
+                        await message.channel.send(debugMsg.slice(0, 2000)); // Truncate if huge
+                    }
+                } else {
+                    console.log("[Passive Analysis]", response.thought);
+                }
+
+                if (response.reaction) {
+                    try {
+                        const targetId = response.reply_to || message.id; // React to the specific message if indicated, otherwise the trigger message? 
+                        // Actually spec says 'reaction' to user message. Usually that means the trigger message.
+                        // But if reply_to is another message, it might imply reacting to that.
+                        // Let's stick to reacting to the trigger message `message` for now unless logic suggests otherwise.
+                        // The example "Input: ... UserA ... Output: reaction" implies reacting to UserA's message (the input).
+                        await message.react(response.reaction);
+                    } catch (e) {
+                        console.error(`Failed to react with ${response.reaction}:`, e.message);
+                    }
+                }
+
+                if (response.send_text === true) {
+                    // Send Typing
+                    await message.channel.sendTyping();
+
+                    const textToSend = response.text_content || "."; // Fallback to avoid empty message error
+
+                    // Logic: reply_to takes precedence.
+                    if (response.reply_to) {
+                        try {
+                            const targetMsg = await message.channel.messages.fetch(response.reply_to);
+                            await targetMsg.reply(textToSend);
+                        } catch (fetchErr) {
+                            console.warn(`Could not fetch reply_to message ${response.reply_to}:`, fetchErr.message);
+                            // Fallback to channel send if target missing
+                            await message.channel.send(textToSend);
+                        }
+                    } else {
+                        // Normal message to channel
+                        await message.channel.send(textToSend);
+                    }
+                }
+
+            } catch (jsonError) {
+                console.error("Failed to parse JSON response from Agent:", contentStr);
+            }    // Optionally: log to a file or just ignore. 
+            // If it fails to parse, we probably shouldn't spam the channel.
+        }
+
+
+    } catch (error) {
+        console.error('Error in passive chat:', error);
+        if (error.message && error.message.includes("404")) {
+            deleteConversationId(contextId);
+        }
     }
 }
