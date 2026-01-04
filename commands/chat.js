@@ -75,10 +75,14 @@ export async function handlePassiveMessage(messages) {
         const roll = Math.random() * 100;
         let modeName = "Unknown";
 
-        if (roll < 95) {
-            // 95% Silent Mode
+        if (roll < 85) {
+            // 85% Silent Mode
             forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO SILENCIOSO. El RNG SOLO decidió que NO tienes permiso para hablar esta vez. Tu personalidad y nivel de caos NO cambian por el RNG. Configura <SEND_TEXT> en FALSE. <REACTION> DEBE SER NULL (Prohibido reaccionar en este modo).`;
             modeName = "Silent";
+        } else if (roll < 95) {
+            // 10% Emote Mode (Reaction Only, No Text)
+            forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO EMOTE. El RNG decidió que SOLO puedes usar emojis. Configura <SEND_TEXT> en FALSE. <REACTION> está PERMITIDA si el contexto lo amerita (no es obligatorio, sé selectiva).`;
+            modeName = "Emote Mode";
         } else {
             // 5% Free Mode (Text + Reaction Allowed)
             forcedInstruction = `\n\n[SISTEMA]: RNG ROLL: ${roll.toFixed(2)}. MODO LIBRE. El RNG SOLO decidió que TIENES permiso para hablar esta vez. Tu personalidad y nivel de caos NO cambian por el RNG - siempre eres tú misma. Puedes responder (<SEND_TEXT>: TRUE) o reaccionar si el contexto lo amerita.`;
