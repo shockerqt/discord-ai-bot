@@ -1,5 +1,5 @@
 import { Client, GatewayIntentBits } from 'discord.js';
-import { getChatResponse, handlePassiveMessage } from './commands/chat.js';
+import { handlePassiveMessage } from './commands/chat.js';
 
 // Initialize Discord Client for Voice Gateway
 const client = new Client({

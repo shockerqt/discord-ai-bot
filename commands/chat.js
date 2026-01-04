@@ -123,23 +123,21 @@ ID del mensaje al que respondes o NULL
 Emoji o NULL
 </REACTION>`;
 
-    // Split Content: System (Instructions) vs User (Chat Log)
-    const systemContent = OUTPUT_INSTRUCTION + forcedInstruction;
-    const userContent = fullContent; // fullContent currently has "--- CURRENT MESSAGES ---\n..."
+    fullContent += OUTPUT_INSTRUCTION;
+    fullContent += forcedInstruction;
 
-    // Log Prompt (Debug)
+    // Log Prompt
     console.log("--- PROMPT SENT TO AGENT ---");
-    console.log("[SYSTEM]:", systemContent);
-    console.log("[USER Start]:", userContent.slice(0, 100) + "...");
+    console.log(fullContent);
     console.log("----------------------------");
 
     // Debug: Echo Input to Chat
     if (debugChannels.has(contextId)) {
-        const debugInputMsg = `**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n\`\`\`\n[SYSTEM]\n${systemContent.slice(0, 500)}...\n\n[USER]\n${userContent}\n\`\`\``;
+        const debugInputMsg = `**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n\`\`\`\n${fullContent}\n\`\`\``;
         if (debugInputMsg.length <= 2000) {
             await lastMessage.channel.send(debugInputMsg);
         } else {
-            await lastMessage.channel.send(`**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n(Truncated)\n\`\`\`\n[USER]\n${userContent.slice(0, 1900)}\n\`\`\``);
+            await lastMessage.channel.send(`**[DEBUG INPUT]**\n**RNG**: ${debugRngInfo}\n(Truncated)\n\`\`\`\n${fullContent.slice(0, 1900)}\n\`\`\``);
         }
     }
 
@@ -152,10 +150,7 @@ Emoji o NULL
             // Start new conversation
             const startParams = {
                 agentId: agentId,
-                inputs: [
-                    { role: 'system', content: systemContent },
-                    { role: 'user', content: userContent }
-                ]
+                inputs: [{ role: 'user', content: fullContent }]
             };
             const convoResponse = await client.beta.conversations.start(startParams);
             conversationId = convoResponse.conversationId || convoResponse.id;
@@ -163,14 +158,10 @@ Emoji o NULL
             outputs = convoResponse.outputs;
         } else {
             // Append
-            // We append both System (as ephemeral instruction for this turn) and User
             const convoResponse = await client.beta.conversations.append({
                 conversationId: conversationId,
                 conversationAppendRequest: {
-                    inputs: [
-                        { role: 'system', content: systemContent },
-                        { role: 'user', content: userContent }
-                    ]
+                    inputs: [{ role: 'user', content: fullContent }]
                 }
             });
             outputs = convoResponse.outputs;
