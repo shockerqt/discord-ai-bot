@@ -217,55 +217,84 @@ Emoji o NULL
             console.log(parsedResponse);
             console.log("-----------------------");
 
-            outputs.push(parsedResponse);
-
             // --- Process Parsed Output ---
-            for (const output of outputs) {
+            // Fix: Do not push to outputs and iterate, use parsedResponse directly.
+            const output = parsedResponse;
 
-                // Debug Mode Output (The "Thought" bubble)
-                if (debugChannels.has(contextId)) {
-                    // Reconstruct a visual blocks for debug
-                    const debugMsg = `**[DEBUG OUTPUT]**\n> **Thought**: ${output.thought}\n> **Send Text**: ${output.send_text}\n> **Reaction**: ${output.reaction}`;
-                    await lastMessage.channel.send(debugMsg);
+            // Debug Mode Output
+            if (debugChannels.has(contextId)) {
+                const debugContent = `
+RNG INFO: ${debugRngInfo}
+
+<THOUGHT>
+${output.thought}
+</THOUGHT>
+
+<SEND_TEXT>
+${output.send_text}
+</SEND_TEXT>
+
+<TEXT_CONTENT>
+${output.text_content}
+</TEXT_CONTENT>
+
+<REACTION>
+${output.reaction}
+</REACTION>
+
+--- RAW RESPONSE ---
+${contentStr}
+`;
+                const buffer = Buffer.from(debugContent, 'utf-8');
+                try {
+                    await lastMessage.channel.send({
+                        content: `**[DEBUG OUTPUT]**`,
+                        files: [{
+                            attachment: buffer,
+                            name: `debug-${Date.now()}.txt`
+                        }]
+                    });
+                } catch (err) {
+                    console.error("Failed to send debug attachment:", err);
+                }
+            }
+
+            if (output.send_text && output.text_content) {
+                // Send Typing
+                await lastMessage.channel.sendTyping();
+
+                // ... logic to send message ...
+                const msgOptions = { content: output.text_content };
+                if (output.reply_to) {
+                    msgOptions.reply = { messageReference: output.reply_to };
                 }
 
-                if (output.send_text && output.text_content) {
-                    // Send Typing
-                    await lastMessage.channel.sendTyping();
-
-                    // ... logic to send message ...
-                    const msgOptions = { content: output.text_content };
-                    if (output.reply_to) {
-                        msgOptions.reply = { messageReference: output.reply_to };
-                    }
-
-                    try {
-                        await lastMessage.channel.send(msgOptions);
-                    } catch (sendErr) {
-                        console.error("Failed to send message:", sendErr);
-                    }
+                try {
+                    await lastMessage.channel.send(msgOptions);
+                } catch (sendErr) {
+                    console.error("Failed to send message:", sendErr);
                 }
+            }
 
-                if (output.reaction) {
-                    try {
-                        // Support multiple reactions (e.g. "🎲⏳💀")
-                        // Use Intl.Segmenter to properly split emojis (grapheme clusters)
-                        const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-                        const reactions = Array.from(segmenter.segment(output.reaction)).map(s => s.segment);
+            if (output.reaction) {
+                try {
+                    // Support multiple reactions (e.g. "🎲⏳💀")
+                    // Use Intl.Segmenter to properly split emojis (grapheme clusters)
+                    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+                    const reactions = Array.from(segmenter.segment(output.reaction)).map(s => s.segment);
 
-                        // Limit to first 3 to avoid spam if AI goes crazy
-                        for (const reactionEmoji of reactions.slice(0, 3)) {
-                            try {
-                                await lastMessage.react(reactionEmoji);
-                            } catch (e) {
-                                console.error(`Failed to react with ${reactionEmoji}:`, e.message);
-                            }
+                    // Limit to first 3 to avoid spam if AI goes crazy
+                    for (const reactionEmoji of reactions.slice(0, 3)) {
+                        try {
+                            await lastMessage.react(reactionEmoji);
+                        } catch (e) {
+                            console.error(`Failed to react with ${reactionEmoji}:`, e.message);
                         }
-                    } catch (e) {
-                        console.error(`Failed to process reactions:`, e.message);
                     }
+                } catch (e) {
+                    console.error(`Failed to process reactions:`, e.message);
                 }
-            } // End for
+            }
         } // End if (outputs)
 
     } catch (error) { // End try
