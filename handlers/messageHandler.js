@@ -40,7 +40,7 @@ export async function handlePassiveMessage(messages) {
     const botUser = lastMessage.client.user;
     const isMentioned = msgs.some(m =>
         m.mentions.users.has(botUser.id) ||
-        /^lumi\b/i.test(m.content.trim())
+        /\blumi\b/i.test(m.content)
     );
 
     // Determinar modo usando el módulo
