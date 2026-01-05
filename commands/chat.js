@@ -206,8 +206,9 @@ Usa NULL si no pasaste el Check de Reglas (Paso 5) en tu pensamiento.
                 inputs: [{ role: 'user', content: fullContent }]
             });
 
-            if (response && response.id) {
-                conversationId = response.id;
+
+            if (response && response.conversationId) {
+                conversationId = response.conversationId;
                 setConversationId(contextId, conversationId);
             }
 
