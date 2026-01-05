@@ -16,7 +16,6 @@ import * as pingCommand from './commands/ping.js';
 import * as joinCommand from './commands/join.js';
 import * as debugCommand from './commands/debug.js';
 import * as historyCommand from './commands/history.js';
-import * as clearPersonalityCommand from './commands/clearPersonality.js';
 
 // Create an express app
 const app = express();
@@ -37,7 +36,6 @@ const commands = {
   [joinCommand.data.name]: joinCommand,
   [debugCommand.data.name]: debugCommand,
   [historyCommand.data.name]: historyCommand,
-  [clearPersonalityCommand.data.name]: clearPersonalityCommand,
 };
 
 /**

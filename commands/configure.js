@@ -1,30 +1,60 @@
 import { InteractionResponseType } from 'discord-interactions';
-import { updateAgentPersona } from '../utils/agentManager.js';
 
 export const data = {
     name: 'configure',
-    description: 'Configure Zavier Sama personality and creativity',
+    description: 'Configure bot personality and settings',
     options: [
         {
-            type: 3, // STRING
-            name: 'personality',
-            description: 'Define the personality instructions (e.g., "You are a pirate...")',
-            required: false,
+            name: 'show',
+            description: 'Show current configuration',
+            type: 1, // SUB_COMMAND
         },
         {
-            type: 10, // NUMBER
+            name: 'personality',
+            description: 'Add personality instructions (appends to existing)',
+            type: 1, // SUB_COMMAND
+            options: [
+                {
+                    type: 3, // STRING
+                    name: 'text',
+                    description: 'The personality instructions to add',
+                    required: true,
+                }
+            ]
+        },
+        {
             name: 'creativity',
             description: 'Set creativity/temperature (0.0 to 1.0)',
-            required: false,
-            min_value: 0.0,
-            max_value: 1.0,
+            type: 1, // SUB_COMMAND
+            options: [
+                {
+                    type: 10, // NUMBER
+                    name: 'value',
+                    description: 'Temperature value (0.0 to 1.0)',
+                    required: true,
+                    min_value: 0.0,
+                    max_value: 1.0,
+                }
+            ]
         },
         {
-            type: 5, // BOOLEAN
             name: 'image_generation',
-            description: 'Enable or disable image generation capabilities',
-            required: false,
-        }
+            description: 'Enable or disable image generation',
+            type: 1, // SUB_COMMAND
+            options: [
+                {
+                    type: 5, // BOOLEAN
+                    name: 'enabled',
+                    description: 'Enable or disable',
+                    required: true,
+                }
+            ]
+        },
+        {
+            name: 'clear_personality',
+            description: 'Clear all personality instructions',
+            type: 1, // SUB_COMMAND
+        },
     ],
     type: 1, // CHAT_INPUT
     integration_types: [0, 1],
@@ -43,16 +73,14 @@ export async function execute(req, res) {
     const endpoint = `webhooks/${application_id}/${token}/messages/@original`;
 
     try {
-        // Dynamic imports
         const { updateAgentPersona, getAgentPersona } = await import('../utils/agentManager.js');
         const { client: discordClient } = await import('../discordClient.js');
 
-        const personalityOption = data.options ? data.options.find(opt => opt.name === 'personality') : null;
-        const creativityOption = data.options ? data.options.find(opt => opt.name === 'creativity') : null;
-        const imageGenOption = data.options ? data.options.find(opt => opt.name === 'image_generation') : null;
+        const subCommand = data.options[0].name;
+        const subOptions = data.options[0].options || [];
 
-        // CASE 1: No arguments provided -> Show current settings
-        if (!personalityOption && !creativityOption && !imageGenOption) {
+        // SHOW - Display current settings
+        if (subCommand === 'show') {
             const currentParams = await getAgentPersona();
 
             const currentInstructions = currentParams.instructions || '';
@@ -60,24 +88,16 @@ export async function execute(req, res) {
             const currentTools = currentParams.tools || [];
             const hasImageGen = currentTools.some(t => t.type === 'image_generation');
 
-            // Create personality file attachment with UTF-8 BOM for proper emoji/accent display
             const personalityBuffer = Buffer.from('\uFEFF' + currentInstructions, 'utf-8');
 
-            // Send file via Discord.js client (same pattern as history.js)
             const channel = await discordClient.channels.fetch(channel_id);
-            if (!channel) {
-                throw new Error("Channel not found.");
-            }
+            if (!channel) throw new Error("Channel not found.");
 
             await channel.send({
                 content: `ℹ️ **Current Configuration**\n\n**Creativity:** ${currentTemp}\n**Image Generation:** ${hasImageGen ? '✅ Enabled' : '❌ Disabled'}\n\n📄 **Personality:** Ver archivo adjunto`,
-                files: [{
-                    attachment: personalityBuffer,
-                    name: 'personality.txt'
-                }]
+                files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
             });
 
-            // Update the deferred interaction
             await DiscordRequest(endpoint, {
                 method: 'PATCH',
                 body: { content: "Configuration shown! (See attachment below)" }
@@ -85,64 +105,81 @@ export async function execute(req, res) {
             return;
         }
 
-        // CASE 2: Arguments provided -> Update and Show Result
-        let temperature = creativityOption ? creativityOption.value : undefined;
-        let enableImage = imageGenOption ? imageGenOption.value : undefined;
+        // CLEAR_PERSONALITY - Clear all instructions
+        if (subCommand === 'clear_personality') {
+            await updateAgentPersona('', undefined, undefined);
 
-        // Handle personality - APPEND to existing
-        let instructions = undefined;
-        if (personalityOption) {
+            await DiscordRequest(endpoint, {
+                method: 'PATCH',
+                body: { content: '🗑️ **Personality cleared!** The bot now has no custom instructions.' }
+            });
+            return;
+        }
+
+        // PERSONALITY - Append new instructions
+        if (subCommand === 'personality') {
+            const textOption = subOptions.find(o => o.name === 'text');
+            const newText = textOption.value;
+
             const currentParams = await getAgentPersona();
             const currentInstructions = currentParams.instructions || '';
-            const newInstructions = personalityOption.value;
-            instructions = currentInstructions
-                ? `${currentInstructions}\n\n${newInstructions}`
-                : newInstructions;
+            const instructions = currentInstructions
+                ? `${currentInstructions}\n\n${newText}`
+                : newText;
+
+            const updatedAgent = await updateAgentPersona(instructions, undefined, undefined);
+            await sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest);
+            return;
         }
 
-        // Perform update
-        const updatedAgent = await updateAgentPersona(instructions, temperature, enableImage);
-
-        // Retrieve final values to display
-        const finalInstructions = updatedAgent.instructions || '';
-        const finalTemp = updatedAgent.temperature ?? (updatedAgent.completionArgs?.temperature) ?? "Default";
-        const finalTools = updatedAgent.tools || [];
-        const finalHasImageGen = finalTools.some(t => t.type === 'image_generation');
-
-        // Create personality file attachment with UTF-8 BOM for proper emoji/accent display
-        const personalityBuffer = Buffer.from('\uFEFF' + finalInstructions, 'utf-8');
-
-        // Send file via Discord.js client
-        const channel = await discordClient.channels.fetch(channel_id);
-        if (!channel) {
-            throw new Error("Channel not found.");
+        // CREATIVITY - Set temperature
+        if (subCommand === 'creativity') {
+            const valueOption = subOptions.find(o => o.name === 'value');
+            const updatedAgent = await updateAgentPersona(undefined, valueOption.value, undefined);
+            await sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest);
+            return;
         }
 
-        await channel.send({
-            content: `✅ **Configuration Updated!**\n\n**Creativity:** ${finalTemp}\n**Image Generation:** ${finalHasImageGen ? '✅ Enabled' : '❌ Disabled'}\n\n📄 **Personality:** Ver archivo adjunto`,
-            files: [{
-                attachment: personalityBuffer,
-                name: 'personality.txt'
-            }]
-        });
-
-        // Update the deferred interaction
-        await DiscordRequest(endpoint, {
-            method: 'PATCH',
-            body: { content: "Configuration updated! (See attachment below)" }
-        });
+        // IMAGE_GENERATION - Toggle
+        if (subCommand === 'image_generation') {
+            const enabledOption = subOptions.find(o => o.name === 'enabled');
+            const updatedAgent = await updateAgentPersona(undefined, undefined, enabledOption.value);
+            await sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest);
+            return;
+        }
 
     } catch (err) {
         console.error("Config update error:", err);
         try {
             await DiscordRequest(endpoint, {
                 method: 'PATCH',
-                body: {
-                    content: `❌ Failed to update configuration: ${err.message}`,
-                },
+                body: { content: `❌ Failed to update configuration: ${err.message}` },
             });
         } catch (e) {
             console.error("Failed to send error message:", e);
         }
     }
+}
+
+// Helper function to send config update with attachment
+async function sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest) {
+    const finalInstructions = updatedAgent.instructions || '';
+    const finalTemp = updatedAgent.temperature ?? (updatedAgent.completionArgs?.temperature) ?? "Default";
+    const finalTools = updatedAgent.tools || [];
+    const finalHasImageGen = finalTools.some(t => t.type === 'image_generation');
+
+    const personalityBuffer = Buffer.from('\uFEFF' + finalInstructions, 'utf-8');
+
+    const channel = await discordClient.channels.fetch(channel_id);
+    if (!channel) throw new Error("Channel not found.");
+
+    await channel.send({
+        content: `✅ **Configuration Updated!**\n\n**Creativity:** ${finalTemp}\n**Image Generation:** ${finalHasImageGen ? '✅ Enabled' : '❌ Disabled'}\n\n📄 **Personality:** Ver archivo adjunto`,
+        files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
+    });
+
+    await DiscordRequest(endpoint, {
+        method: 'PATCH',
+        body: { content: "Configuration updated! (See attachment below)" }
+    });
 }
