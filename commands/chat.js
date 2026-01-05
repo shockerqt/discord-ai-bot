@@ -193,8 +193,7 @@ Usa NULL si no pasaste el Check de Reglas (Paso 5) en tu pensamiento.
     try {
         let conversationId = getConversationId(contextId);
         let contentBuffer = "";
-        let currentState = "idle"; // "idle" | "thinking" | "writing"
-        let hasShownTyping = false;
+
 
         // Función auxiliar para extraer texto de eventos de streaming
         const extractTextFromEvent = (event) => {
@@ -266,26 +265,7 @@ Usa NULL si no pasaste el Check de Reglas (Paso 5) en tu pensamiento.
             const chunk = extractTextFromEvent(event);
             contentBuffer += chunk;
 
-            // Detectar apertura de tags para cambiar estado
-            if (contentBuffer.includes("<THOUGHT>") && !contentBuffer.includes("</THOUGHT>")) {
-                if (currentState !== "thinking") {
-                    currentState = "thinking";
-                    console.log("[Streaming] State: THINKING");
-                }
-            }
 
-            // Solo mostrar typing si hay contenido real después de <TEXT_CONTENT>
-            if (contentBuffer.includes("<TEXT_CONTENT>") && !contentBuffer.includes("</TEXT_CONTENT>")) {
-                // Extraer contenido después del tag de apertura
-                const afterTag = contentBuffer.split("<TEXT_CONTENT>")[1] || "";
-                // Verificar si hay contenido que no sea solo espacios en blanco
-                if (afterTag.trim().length > 0 && currentState !== "writing" && !hasShownTyping) {
-                    currentState = "writing";
-                    console.log("[Streaming] State: WRITING - Sending typing indicator");
-                    await lastMessage.channel.sendTyping();
-                    hasShownTyping = true;
-                }
-            }
         }
 
         // Si aún no tenemos conversationId guardado (caso edge), intentar guardarlo
