@@ -61,7 +61,7 @@ export async function updateAgentPersona(instructions, temperature, enableImageG
             }
         };
 
-        if (instructions) {
+        if (instructions !== undefined) {
             updatePayload.agentUpdateRequest.instructions = instructions;
         }
 
