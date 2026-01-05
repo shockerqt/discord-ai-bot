@@ -18,7 +18,13 @@ export const data = {
                     type: 3, // STRING
                     name: 'text',
                     description: 'The personality instructions to add',
-                    required: true,
+                    required: false,
+                },
+                {
+                    type: 11, // ATTACHMENT
+                    name: 'file',
+                    description: 'Text file with personality instructions (bypasses 2000 char limit)',
+                    required: false,
                 }
             ]
         },
@@ -119,13 +125,49 @@ export async function execute(req, res) {
         // PERSONALITY - Append new instructions
         if (subCommand === 'personality') {
             const textOption = subOptions.find(o => o.name === 'text');
-            const newText = textOption.value;
+            const fileOption = subOptions.find(o => o.name === 'file');
 
-            const currentParams = await getAgentPersona();
-            const currentInstructions = currentParams.instructions || '';
-            const instructions = currentInstructions
-                ? `${currentInstructions}\n\n${newText}`
-                : newText;
+            let newText = '';
+
+            // Handle attachment if provided
+            if (fileOption) {
+                const attachmentId = fileOption.value;
+                const attachment = req.body.data.resolved?.attachments?.[attachmentId];
+                if (attachment && attachment.url) {
+                    try {
+                        const response = await fetch(attachment.url);
+                        if (!response.ok) throw new Error(`Failed to fetch attachment: ${response.status}`);
+                        newText = await response.text();
+                    } catch (fetchErr) {
+                        await DiscordRequest(endpoint, {
+                            method: 'PATCH',
+                            body: { content: `❌ Failed to read attachment: ${fetchErr.message}` }
+                        });
+                        return;
+                    }
+                }
+            } else if (textOption) {
+                newText = textOption.value;
+            } else {
+                await DiscordRequest(endpoint, {
+                    method: 'PATCH',
+                    body: { content: '❌ Please provide either text or a file attachment.' }
+                });
+                return;
+            }
+
+            let instructions = '';
+
+            // File overwrites, text appends
+            if (fileOption) {
+                instructions = newText; // Overwrite
+            } else {
+                const currentParams = await getAgentPersona();
+                const currentInstructions = currentParams.instructions || '';
+                instructions = currentInstructions
+                    ? `${currentInstructions}\n\n${newText}`
+                    : newText;
+            }
 
             const updatedAgent = await updateAgentPersona(instructions, undefined, undefined);
             await sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest);
