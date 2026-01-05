@@ -192,89 +192,57 @@ Usa NULL si no pasaste el Check de Reglas (Paso 5) en tu pensamiento.
 
     try {
         let conversationId = getConversationId(contextId);
-        let contentBuffer = "";
 
 
-        // Función auxiliar para extraer texto de eventos de streaming
-        const extractTextFromEvent = (event) => {
-            // DEBUG: Loguear estructura completa del evento (comentar después de debuggear)
-            // console.log("[Stream Event]", JSON.stringify(event, null, 2));
 
-            // Manejar eventos message.output.delta - el contenido está en event.data.content
-            if (event.data?.type === 'message.output.delta' && event.data.content) {
-                return event.data.content;
-            }
-
-            // Manejar content.delta (formato alternativo)
-            if (event.data?.type === 'content.delta' && event.data.delta?.text) {
-                return event.data.delta.text;
-            }
-
-            // Verificar propiedades directas (el evento podría no tener .data)
-            if (event.type === 'message.output.delta' && event.content) {
-                return event.content;
-            }
-
-            if (event.type === 'content.delta' && event.delta?.text) {
-                return event.delta.text;
-            }
-
-            // Manejar array de outputs si está presente (para eventos finales)
-            if (event.data?.outputs && Array.isArray(event.data.outputs)) {
-                return event.data.outputs
-                    .filter(o => o.content)
-                    .map(o => {
-                        if (Array.isArray(o.content)) {
-                            return o.content.filter(p => p.type === 'text').map(p => p.text).join('');
-                        }
-                        return typeof o.content === 'string' ? o.content : '';
-                    })
-                    .join('');
-            }
-
-            return "";
-        };
-
-        let streamResult;
+        let contentStr = "";
+        let response;
 
         if (!conversationId) {
             const agentId = await getOmniAgentId();
-            // Iniciar nueva conversación con streaming
-            streamResult = await client.beta.conversations.startStream({
+            // Iniciar nueva conversación (Síncrono)
+            response = await client.beta.conversations.start({
                 agentId: agentId,
                 inputs: [{ role: 'user', content: fullContent }]
             });
-        } else {
-            // Continuar conversación con streaming
-            streamResult = await client.beta.conversations.appendStream({
-                conversationId: conversationId,
-                conversationAppendStreamRequest: {
-                    inputs: [{ role: 'user', content: fullContent }]
-                }
-            });
-        }
 
-        // Procesar el stream
-        for await (const event of streamResult) {
-            // Extraer ID de conversación del primer evento si es una nueva conversación
-            if (!conversationId && event.data?.conversationId) {
-                conversationId = event.data.conversationId;
+            if (response && response.id) {
+                conversationId = response.id;
                 setConversationId(contextId, conversationId);
             }
 
-            const chunk = extractTextFromEvent(event);
-            contentBuffer += chunk;
+            // Extraer contenido de la respuesta (Conversations API Structure)
+            // Estructura: response.outputs[0].content
+            if (response.outputs && response.outputs.length > 0) {
+                // Buscar el output correcto, aunque generalmente es el primero
+                const output = response.outputs.find(o => o.role === 'assistant' || o.content);
+                if (output) {
+                    contentStr = output.content;
+                }
+            }
+        } else {
+            // Continuar conversación (Síncrono)
+            response = await client.beta.conversations.append({
+                conversationId: conversationId,
+                conversationAppendRequest: {
+                    inputs: [{ role: 'user', content: fullContent }]
+                }
+            });
 
-
-        }
-
-        // Si aún no tenemos conversationId guardado (caso edge), intentar guardarlo
-        if (!getConversationId(contextId) && conversationId) {
-            setConversationId(contextId, conversationId);
+            if (response.outputs && response.outputs.length > 0) {
+                const output = response.outputs.find(o => o.role === 'assistant' || o.content);
+                if (output) {
+                    contentStr = output.content;
+                }
+            }
         }
 
         // Strip code blocks if AI wrapped it in ```xml ... ```
-        let contentStr = contentBuffer.replace(/```xml/g, '').replace(/```/g, '').trim();
+        contentStr = contentStr.replace(/```xml/g, '').replace(/```/g, '').trim();
+
+        if (!contentStr) {
+            console.log("[DEBUG] Empty content extracted. Full Response:", JSON.stringify(response, null, 2));
+        }
 
         console.log("--- RAW RESPONSE ---");
         console.log(contentStr);
@@ -331,10 +299,7 @@ ${contentStr}
         }
 
         if (output.send_text && output.text_content) {
-            // Send Typing (might already have been sent, but ensure it)
-            if (!hasShownTyping) {
-                await lastMessage.channel.sendTyping();
-            }
+
 
             // ... logic to send message ...
             const msgOptions = { content: output.text_content };
