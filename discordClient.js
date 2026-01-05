@@ -1,5 +1,6 @@
 import { Client, GatewayIntentBits } from 'discord.js';
 import { handlePassiveMessage } from './handlers/messageHandler.js';
+import { enqueueMessage } from './utils/messageQueue.js';
 
 // Initialize Discord Client for Voice Gateway
 const client = new Client({
@@ -16,7 +17,8 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     try {
-        await handlePassiveMessage(message);
+        // Encolar mensaje para procesamiento secuencial
+        await enqueueMessage(message, handlePassiveMessage);
     } catch (error) {
         console.error("Error processing message:", error);
     }
