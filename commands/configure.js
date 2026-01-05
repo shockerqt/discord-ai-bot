@@ -24,6 +24,12 @@ export const data = {
             name: 'image_generation',
             description: 'Enable or disable image generation capabilities',
             required: false,
+        },
+        {
+            type: 5, // BOOLEAN
+            name: 'clear_personality',
+            description: 'Clear all personality instructions',
+            required: false,
         }
     ],
     type: 1, // CHAT_INPUT
@@ -50,9 +56,10 @@ export async function execute(req, res) {
         const personalityOption = data.options ? data.options.find(opt => opt.name === 'personality') : null;
         const creativityOption = data.options ? data.options.find(opt => opt.name === 'creativity') : null;
         const imageGenOption = data.options ? data.options.find(opt => opt.name === 'image_generation') : null;
+        const clearPersonalityOption = data.options ? data.options.find(opt => opt.name === 'clear_personality') : null;
 
         // CASE 1: No arguments provided -> Show current settings
-        if (!personalityOption && !creativityOption && !imageGenOption) {
+        if (!personalityOption && !creativityOption && !imageGenOption && !clearPersonalityOption) {
             const currentParams = await getAgentPersona();
 
             const currentInstructions = currentParams.instructions || '(None)';
@@ -86,9 +93,24 @@ export async function execute(req, res) {
         }
 
         // CASE 2: Arguments provided -> Update and Show Result
-        let instructions = personalityOption ? personalityOption.value : undefined;
         let temperature = creativityOption ? creativityOption.value : undefined;
         let enableImage = imageGenOption ? imageGenOption.value : undefined;
+
+        // Handle personality
+        let instructions = undefined;
+
+        // CLEAR takes priority
+        if (clearPersonalityOption && clearPersonalityOption.value === true) {
+            instructions = ''; // Empty string to clear
+        } else if (personalityOption) {
+            // APPEND to existing personality
+            const currentParams = await getAgentPersona();
+            const currentInstructions = currentParams.instructions || '';
+            const newInstructions = personalityOption.value;
+            instructions = currentInstructions
+                ? `${currentInstructions}\n\n${newInstructions}`
+                : newInstructions;
+        }
 
         // Perform update
         const updatedAgent = await updateAgentPersona(instructions, temperature, enableImage);
