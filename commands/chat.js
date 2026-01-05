@@ -64,11 +64,26 @@ export async function handlePassiveMessage(messages) {
         forcedInstruction = "\n\n[SISTEMA]: MODO ACTIVO INICIADO. Tienes 3.0 minutos de atención prioritaria. Responde (TEXTO o REACCIÓN) SOLO si el mensaje ES RELEVANTE para la conversación en curso o si te mencionan directamente. Si cambian de tema a algo que no te incumbe, IGNORA (<SEND_TEXT>: FALSE, <REACTION>: NULL).";
         console.log("[Active Mode] Refreshed by Mention.");
     } else if (isActiveMode) {
-        // ACTIVE MODE (Timer)
-        // Bypass RNG, but conditional response based on relevance logic
+        // ACTIVE MODE (Timer) - Probabilistic: 50% Silent, 30% Emote, 20% Text
         const timeLeft = (3 - (nowTime - lastActiveTime) / 60000).toFixed(1);
-        debugRngInfo = `Mode: Active (Timer) | ${timeLeft}m left`;
-        forcedInstruction = `\n\n[SISTEMA]: MODO ACTIVO (${timeLeft}m restantes). El usuario te habló hace poco. Responde (TEXTO o REACCIÓN) SOLO si el mensaje sigue el hilo de la conversación original. Si el usuario habla de otra cosa irrelevante para ti, DEBES IGNORAR.`;
+        const activeRoll = Math.random() * 100;
+        let activeModeType = "Unknown";
+
+        if (activeRoll < 50) {
+            // 50% Silent
+            activeModeType = "Silent";
+            forcedInstruction = `\n\n[SISTEMA]: MODO ACTIVO (${timeLeft}m restantes). RNG: ${activeRoll.toFixed(2)}. MODO SILENCIOSO (ACTIVO). Aunque estás en tiempo activo, el RNG decidió silencio. <SEND_TEXT>: FALSE. <REACTION>: NULL (Prohibido).`;
+        } else if (activeRoll < 80) {
+            // 30% Emote
+            activeModeType = "Emote";
+            forcedInstruction = `\n\n[SISTEMA]: MODO ACTIVO (${timeLeft}m restantes). RNG: ${activeRoll.toFixed(2)}. MODO EMOTE (ACTIVO). Solo emojis permitidos si el contexto lo amerita. <SEND_TEXT>: FALSE.`;
+        } else {
+            // 20% Free / Text
+            activeModeType = "Text";
+            forcedInstruction = `\n\n[SISTEMA]: MODO ACTIVO (${timeLeft}m restantes). RNG: ${activeRoll.toFixed(2)}. MODO LIBRE (ACTIVO). Tienes permiso para hablar (<SEND_TEXT>: TRUE) si sigue el hilo de la conversación.`;
+        }
+
+        debugRngInfo = `Mode: Active (${activeModeType}) | ${timeLeft}m left`;
         console.log(`[Active Mode] Timer Active. ${debugRngInfo}`);
     } else {
         // PASSIVE MODE (RNG)
