@@ -32,19 +32,20 @@ export const data = {
 };
 
 export async function execute(req, res) {
-    const { data, member, user, application_id, token } = req.body;
+    const { data, channel_id, application_id, token } = req.body;
 
     // 1. Defer immediately
     res.send({
-        type: 5, // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
     });
 
     const { DiscordRequest } = await import('../utils.js');
     const endpoint = `webhooks/${application_id}/${token}/messages/@original`;
 
     try {
-        // Dynamic import to avoid circular dependency
+        // Dynamic imports
         const { updateAgentPersona, getAgentPersona } = await import('../utils/agentManager.js');
+        const { client: discordClient } = await import('../discordClient.js');
 
         const personalityOption = data.options ? data.options.find(opt => opt.name === 'personality') : null;
         const creativityOption = data.options ? data.options.find(opt => opt.name === 'creativity') : null;
@@ -53,25 +54,33 @@ export async function execute(req, res) {
         // CASE 1: No arguments provided -> Show current settings
         if (!personalityOption && !creativityOption && !imageGenOption) {
             const currentParams = await getAgentPersona();
-            // Assuming structure, verify actual response structure. 
-            // Usually agent.instructions and agent.completion_args.temperature or similar.
-            // Mistral API agent object: instructions, temperature (sometimes undefined if default).
 
-            const currentInstructions = currentParams.instructions;
-            // SDK might nest it in completion_args?? Or top level in 'get' response?
-            // Checking docs: 'agent' object has 'instructions'. Temperature is likely in agent metadata or root if supported.
-            // Let's assume root or completionArgs.
-
-            // Safe access
+            const currentInstructions = currentParams.instructions || '(None)';
             const currentTemp = currentParams.temperature ?? (currentParams.completionArgs?.temperature) ?? "Default";
             const currentTools = currentParams.tools || [];
             const hasImageGen = currentTools.some(t => t.type === 'image_generation');
 
+            // Create personality file attachment with UTF-8 BOM for proper emoji/accent display
+            const personalityBuffer = Buffer.from('\uFEFF' + currentInstructions, 'utf-8');
+
+            // Send file via Discord.js client (same pattern as history.js)
+            const channel = await discordClient.channels.fetch(channel_id);
+            if (!channel) {
+                throw new Error("Channel not found.");
+            }
+
+            await channel.send({
+                content: `ℹ️ **Current Configuration**\n\n**Creativity:** ${currentTemp}\n**Image Generation:** ${hasImageGen ? '✅ Enabled' : '❌ Disabled'}\n\n📄 **Personality:** Ver archivo adjunto`,
+                files: [{
+                    attachment: personalityBuffer,
+                    name: 'personality.txt'
+                }]
+            });
+
+            // Update the deferred interaction
             await DiscordRequest(endpoint, {
                 method: 'PATCH',
-                body: {
-                    content: `ℹ️ **Current Configuration for Zavier Sama**\n\n**Personality:**\n> ${currentInstructions || '(None)'}\n\n**Creativity:** ${currentTemp}\n\n**Image Generation:** ${hasImageGen ? '✅ Enabled' : '❌ Disabled'}`,
-                },
+                body: { content: "Configuration shown! (See attachment below)" }
             });
             return;
         }
@@ -84,18 +93,33 @@ export async function execute(req, res) {
         // Perform update
         const updatedAgent = await updateAgentPersona(instructions, temperature, enableImage);
 
-        // Retrieve final values to display "Unchanged" values correctly
-        // updatedAgent should contain the full new state
-        const finalInstructions = updatedAgent.instructions;
+        // Retrieve final values to display
+        const finalInstructions = updatedAgent.instructions || '(None)';
         const finalTemp = updatedAgent.temperature ?? (updatedAgent.completionArgs?.temperature) ?? "Default";
         const finalTools = updatedAgent.tools || [];
         const finalHasImageGen = finalTools.some(t => t.type === 'image_generation');
 
+        // Create personality file attachment with UTF-8 BOM for proper emoji/accent display
+        const personalityBuffer = Buffer.from('\uFEFF' + finalInstructions, 'utf-8');
+
+        // Send file via Discord.js client
+        const channel = await discordClient.channels.fetch(channel_id);
+        if (!channel) {
+            throw new Error("Channel not found.");
+        }
+
+        await channel.send({
+            content: `✅ **Configuration Updated!**\n\n**Creativity:** ${finalTemp}\n**Image Generation:** ${finalHasImageGen ? '✅ Enabled' : '❌ Disabled'}\n\n📄 **Personality:** Ver archivo adjunto`,
+            files: [{
+                attachment: personalityBuffer,
+                name: 'personality.txt'
+            }]
+        });
+
+        // Update the deferred interaction
         await DiscordRequest(endpoint, {
             method: 'PATCH',
-            body: {
-                content: `✅ **Configuration Updated!**\n\n**Personality:**\n> ${finalInstructions || '(None)'}\n\n**Creativity:** ${finalTemp}\n\n**Image Generation:** ${finalHasImageGen ? '✅ Enabled' : '❌ Disabled'}`,
-            },
+            body: { content: "Configuration updated! (See attachment below)" }
         });
 
     } catch (err) {

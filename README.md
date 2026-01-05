@@ -1,108 +1,126 @@
-# Getting Started app for Discord
+# 🌙 Lumi - Discord AI Bot
 
-This project contains a basic rock-paper-scissors-style Discord app written in JavaScript, built for the [getting started guide](https://discord.com/developers/docs/getting-started).
+Un bot de Discord con personalidad propia, potenciado por **Mistral AI**. Lumi es una IA conversacional que participa activamente en chats de Discord con un estilo único "cute but psycho" y jerga chilena.
 
-![Demo of app](https://github.com/discord/discord-example-app/raw/main/assets/getting-started-demo.gif?raw=true)
+## ✨ Características
 
-## Project structure
-Below is a basic overview of the project structure:
+- 🤖 **IA Conversacional**: Respuestas inteligentes usando Mistral AI Agents
+- 💬 **Respuestas Pasivas**: Participa naturalmente en conversaciones sin necesidad de comandos
+- 🎭 **Personalidad Única**: Estilo "unhinged AI" con humor seco y dialecto chileno
+- 🎤 **Soporte de Voz**: Capacidad de unirse a canales de voz
+- 🧠 **Memoria Contextual**: Mantiene el contexto de conversaciones por canal
+- 🎲 **Sistema de Modos**: Silencioso, Libre y Activo según el contexto
 
-```
-├── examples    -> short, feature-specific sample apps
-│   ├── app.js  -> finished app.js code
-│   ├── button.js
-│   ├── command.js
-│   ├── modal.js
-│   ├── selectMenu.js
-├── .env.sample -> sample .env file
-├── app.js      -> main entrypoint for app
-├── commands.js -> slash command payloads + helpers
-├── game.js     -> logic specific to RPS
-├── utils.js    -> utility functions and enums
-├── package.json
-├── README.md
-└── .gitignore
-```
+## 🚀 Inicio Rápido
 
-## Running app locally
+### Prerrequisitos
 
-Before you start, you'll need to install [NodeJS](https://nodejs.org/en/download/) and [create a Discord app](https://discord.com/developers/applications) with the proper permissions:
-- `applications.commands`
-- `bot` (with Send Messages enabled)
+- [Node.js](https://nodejs.org/) >= 18.x
+- Una [aplicación de Discord](https://discord.com/developers/applications) configurada
+- API Key de [Mistral AI](https://mistral.ai/)
 
+### Instalación
 
-Configuring the app is covered in detail in the [getting started guide](https://discord.com/developers/docs/getting-started).
-
-### Setup project
-
-First clone the project:
-```
-git clone https://github.com/discord/discord-example-app.git
+1. Clona el repositorio:
+```bash
+git clone https://github.com/shockerqt/discord-ai-bot.git
+cd discord-ai-bot
 ```
 
-Then navigate to its directory and install dependencies:
-```
-cd discord-example-app
+2. Instala las dependencias:
+```bash
 npm install
 ```
-### Get app credentials
 
-Fetch the credentials from your app's settings and add them to a `.env` file (see `.env.sample` for an example). You'll need your app ID (`APP_ID`), bot token (`DISCORD_TOKEN`), and public key (`PUBLIC_KEY`).
-
-Fetching credentials is covered in detail in the [getting started guide](https://discord.com/developers/docs/getting-started).
-
-> 🔑 Environment variables can be added to the `.env` file in Glitch or when developing locally, and in the Secrets tab in Replit (the lock icon on the left).
-
-### Install slash commands
-
-The commands for the example app are set up in `commands.js`. All of the commands in the `ALL_COMMANDS` array at the bottom of `commands.js` will be installed when you run the `register` command configured in `package.json`:
-
+3. Configura las variables de entorno copiando `.env.sample` a `.env`:
+```bash
+cp .env.sample .env
 ```
+
+4. Completa el archivo `.env` con tus credenciales:
+```env
+APP_ID=tu_app_id
+PUBLIC_KEY=tu_public_key
+DISCORD_TOKEN=tu_bot_token
+MISTRAL_API_KEY=tu_mistral_api_key
+```
+
+5. Registra los slash commands:
+```bash
 npm run register
 ```
 
-### Run the app
-
-After your credentials are added, go ahead and run the app:
-
-```
-node app.js
+6. Inicia el bot:
+```bash
+npm start
 ```
 
-> ⚙️ A package [like `nodemon`](https://github.com/remy/nodemon), which watches for local changes and restarts your app, may be helpful while locally developing.
-
-If you aren't following the [getting started guide](https://discord.com/developers/docs/getting-started), you can move the contents of `examples/app.js` (the finished `app.js` file) to the top-level `app.js`.
-
-### Set up interactivity
-
-The project needs a public endpoint where Discord can send requests. To develop and test locally, you can use something like [`ngrok`](https://ngrok.com/) to tunnel HTTP traffic.
-
-Install ngrok if you haven't already, then start listening on port `3000`:
-
-```
-ngrok http 3000
+Para desarrollo con hot-reload:
+```bash
+npm run dev
 ```
 
-You should see your connection open:
+### Configuración de Interacciones
 
-```
-Tunnel Status                 online
-Version                       2.0/2.0
-Web Interface                 http://127.0.0.1:4040
-Forwarding                    https://1234-someurl.ngrok.io -> localhost:3000
+El bot requiere un endpoint público para recibir interacciones de Discord.
 
-Connections                  ttl     opn     rt1     rt5     p50     p90
-                              0       0       0.00    0.00    0.00    0.00
+1. Usa [ngrok](https://ngrok.com/) para crear un túnel:
+```bash
+npm run ngrok
 ```
 
-Copy the forwarding address that starts with `https`, in this case `https://1234-someurl.ngrok.io`, then go to your [app's settings](https://discord.com/developers/applications).
+2. Copia la URL HTTPS generada (ej: `https://xxxx.ngrok.io`)
 
-On the **General Information** tab, there will be an **Interactions Endpoint URL**. Paste your ngrok address there, and append `/interactions` to it (`https://1234-someurl.ngrok.io/interactions` in the example).
+3. En la [configuración de tu app](https://discord.com/developers/applications):
+   - Ve a **General Information**
+   - En **Interactions Endpoint URL**, pega: `https://xxxx.ngrok.io/interactions`
+   - Guarda los cambios
 
-Click **Save Changes**, and your app should be ready to run 🚀
+## 📋 Comandos
 
-## Other resources
-- Read **[the documentation](https://discord.com/developers/docs/intro)** for in-depth information about API features.
-- Browse the `examples/` folder in this project for smaller, feature-specific code examples
-- Join the **[Discord Developers server](https://discord.gg/discord-developers)** to ask questions about the API, attend events hosted by the Discord API team, and interact with other devs.
-- Check out **[community resources](https://discord.com/developers/docs/topics/community-resources#community-resources)** for language-specific tools maintained by community members.
+| Comando | Descripción |
+|---------|-------------|
+| `/ping` | Verifica que el bot está funcionando |
+| `/model` | Configura el modelo de IA |
+| `/memory` | Gestiona la memoria del bot |
+| `/configure` | Configura opciones del bot |
+| `/reset` | Reinicia la conversación |
+| `/debug` | Activa/desactiva modo debug |
+| `/history` | Muestra historial de conversación |
+| `/join` | Une al bot a un canal de voz |
+
+## 📁 Estructura del Proyecto
+
+```
+├── app.js              → Servidor Express y endpoint de interacciones
+├── commands.js         → Registro de slash commands
+├── discordClient.js    → Cliente de Discord.js para Gateway
+├── commands/           → Implementación de cada comando
+│   ├── configure.js
+│   ├── debug.js
+│   ├── history.js
+│   ├── join.js
+│   ├── leave.js
+│   ├── memory.js
+│   ├── model.js
+│   ├── ping.js
+│   └── reset.js
+├── handlers/           → Manejadores de eventos
+│   ├── messageHandler.js
+│   └── message/        → Módulos del message handler
+├── prompts/            → Prompts del sistema
+├── utils/              → Utilidades y helpers
+└── LUMI_INSTRUCTIONS.md → Instrucciones de personalidad
+```
+
+## 🛠️ Tecnologías
+
+- **[Express](https://expressjs.com/)** - Servidor HTTP para interacciones
+- **[discord.js](https://discord.js.org/)** - Cliente de Discord para Gateway y voz
+- **[discord-interactions](https://github.com/discord/discord-interactions-js)** - Verificación de interacciones
+- **[@mistralai/mistralai](https://github.com/mistralai/client-js)** - SDK de Mistral AI
+- **[@discordjs/voice](https://discord.js.org/docs/packages/voice)** - Soporte de voz
+
+## 📄 Licencia
+
+MIT
