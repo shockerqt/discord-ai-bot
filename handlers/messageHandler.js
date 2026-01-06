@@ -269,10 +269,8 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
 
     // DEBUG: Full trace
     if (debugMode === 'full') {
-        let systemMsg = getLumiSystemMessage();
-        if (targetIds.length > 0) systemMsg += `\n\n[REPLY TO MESSAGE_IDs]: ${targetIds.join(', ')}`;
-
-        const historyDebug = `[SYSTEM]\n${systemMsg}\n\n---\n\n` + history.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
+        // Removed System Message from debug output to reduce noise
+        const historyDebug = history.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
         await sendDebugAttachment(channel, `🤖 LUMI INPUT`, historyDebug);
     }
 
@@ -282,16 +280,18 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
 
         // DEBUG: Full trace including tools
         if (debugMode === 'full' && trace) {
-            const fullTrace = trace.map(m => {
-                if (m.role === 'tool') {
-                    return `[TOOL RESULT] (${m.name}): ${m.content}`;
-                }
-                if (m.toolCalls) {
-                    const calls = m.toolCalls.map(c => `${c.function.name}(${c.function.arguments})`).join(', ');
-                    return `[ASSISTANT TOOL CALLS]: ${calls}`;
-                }
-                return `[${m.role.toUpperCase()}]: ${m.content}`;
-            }).join('\n\n---\n\n');
+            const fullTrace = trace
+                .filter(m => m.role !== 'system') // Filter out system prompt
+                .map(m => {
+                    if (m.role === 'tool') {
+                        return `[TOOL RESULT] (${m.name}): ${m.content}`;
+                    }
+                    if (m.toolCalls) {
+                        const calls = m.toolCalls.map(c => `${c.function.name}(${c.function.arguments})`).join(', ');
+                        return `[ASSISTANT TOOL CALLS]: ${calls}`;
+                    }
+                    return `[${m.role.toUpperCase()}]: ${m.content}`;
+                }).join('\n\n---\n\n');
 
             await sendDebugAttachment(channel, `🛠️ LUMI TRACE (Tools & History)`, fullTrace);
         }
