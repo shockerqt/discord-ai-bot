@@ -3,10 +3,12 @@
  * Manages available tools for the AI Agent.
  */
 import * as rngTool from './rng.js';
+import * as gifTool from './gif.js';
 
 // Add new tools here
 const tools = {
-    'rng_tool': rngTool
+    'rng_tool': rngTool,
+    'gif_tool': gifTool
 };
 
 /**
