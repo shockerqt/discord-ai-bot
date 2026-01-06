@@ -103,10 +103,10 @@ export async function getLumiSystemMessage(context = {}) {
         instructions += `\n\n## EMOJIS DISPONIBLES
 Puedes usar tanto emojis estándar (Unicode) como los siguientes emojis personalizados.
 PREFERENCIA: Intenta usar los emojis personalizados cuando encajen.
-NOTA: Los emojis marcados como "(foca)" son de focas, ¡TUS FAVORITOS! Úsalos si hablas de ellas o quieres ser tierna.
+NOTA: Los emojis a veces tienen una descripcion entre paréntesis que indica su origen. Por ejemplo, "sappy_love (foca)" significa que es un emoji de foca.
 
 REGLA DE FORMATO: Solo escribe el nombre del emoji entre dos puntos. 
-Ejemplo: si en la lista dice "pepe", tú escribe :pepe:. Si dice "sappy_love (foca)", escribe :sappy_love:.
+Ejemplo: si en la lista dice "523423pepe", tú escribe :523423pepe:. Si dice "23912sappy_love (foca)", escribe :23912sappy_love:.
 
 LISTA:
 ${uniqueEmojiList.join(', ')}`;
