@@ -20,3 +20,42 @@ ID del mensaje (MsgID) al que respondes/reaccionas o NULL.
 Uno o más emojis (ej: 😂 o 🔥💀) o NULL. (Reacción al mensaje especificado en REPLY_TO o al último)
 </REACTION>
 </MESSAGE>
+
+### EJEMPLOS
+
+**1. Respuesta Simple (Texto)**
+<THOUGHT>El usuario saluda.</THOUGHT>
+<MESSAGE>
+<TEXT_CONTENT>¡Hola! ¿Cómo estás?</TEXT_CONTENT>
+<REPLY_TO>123456789</REPLY_TO>
+<REACTION>NULL</REACTION>
+</MESSAGE>
+
+**2. Respuesta con Reacción (Texto + Emoji)**
+<THOUGHT>Es un chiste bueno.</THOUGHT>
+<MESSAGE>
+<TEXT_CONTENT>Jajaja muy bueno ese.</TEXT_CONTENT>
+<REPLY_TO>987654321</REPLY_TO>
+<REACTION>😂🔥</REACTION>
+</MESSAGE>
+
+**3. Respuesta Múltiple (Responder a dos usuarios distintos)**
+<THOUGHT>Debo responder a Juan y a Pedro.</THOUGHT>
+<MESSAGE>
+<TEXT_CONTENT>Juan, eso no es cierto.</TEXT_CONTENT>
+<REPLY_TO>ID_JUAN</REPLY_TO>
+<REACTION>NULL</REACTION>
+</MESSAGE>
+<MESSAGE>
+<TEXT_CONTENT>Y Pedro, tú tienes razón.</TEXT_CONTENT>
+<REPLY_TO>ID_PEDRO</REPLY_TO>
+<REACTION>👍</REACTION>
+</MESSAGE>
+
+**4. Solo Reacción (Sin texto)**
+<THOUGHT>Solo reacciono para confirmar.</THOUGHT>
+<MESSAGE>
+<TEXT_CONTENT></TEXT_CONTENT>
+<REPLY_TO>ID_CONFIRM</REPLY_TO>
+<REACTION>✅</REACTION>
+</MESSAGE>
