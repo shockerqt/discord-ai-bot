@@ -38,7 +38,10 @@ Pensamiento específico para el ID1...
 <MESSAGE>
 <TEXT_CONTENT>Respuesta 1</TEXT_CONTENT>
 <REPLY_TO>ID1</REPLY_TO>
-<REACTION>NULL</REACTION>
+<REACTION>ID o EMOJI</REACTION>
+- Si quieres reaccionar al mensaje, pon aquí el EMOJI.
+- PUEDES usar emojis personalizados del servidor (ej: `<:pepe:12345>`) si están disponibles en el contexto. PREFIERE EMOJIS PERSONALIZADOS si encajan.
+- Si no hay reacción, pon NULL.
 </MESSAGE>
 
 <!-- Segundo Mensaje (si aplica) -->
