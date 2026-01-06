@@ -265,6 +265,13 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
     // IMPORTANT: Get formatted history for Lumi
     const history = getFormattedHistory(contextId);
 
+    // Context for System Prompt Injection
+    const promptContext = {
+        channel: channel,
+        guild: channel.guild,
+        client: channel.client
+    };
+
     console.log(`[Trigger] Lumi response for ${contextId}. Targets: ${targetIds.join(',')}`);
 
     // DEBUG: Full trace
