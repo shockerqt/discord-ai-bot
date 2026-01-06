@@ -18,8 +18,31 @@ export const data = {
     ],
 };
 
+// Default debug mode from env var (useful for local development)
+// Values: 'off' | 'thoughts' | 'full'
+const DEFAULT_DEBUG_MODE = process.env.DEFAULT_DEBUG_MODE || null;
+
 // In-memory map of channels where debug is enabled: channelId -> mode ('thoughts' | 'full')
-export const debugChannels = new Map();
+const debugChannelsMap = new Map();
+
+/**
+ * Get debug mode for a channel
+ * Falls back to DEFAULT_DEBUG_MODE if channel has no explicit setting
+ */
+export function getDebugMode(channelId) {
+    if (debugChannelsMap.has(channelId)) {
+        return debugChannelsMap.get(channelId);
+    }
+    return DEFAULT_DEBUG_MODE;
+}
+
+// Export for backwards compatibility with existing code
+export const debugChannels = {
+    get: getDebugMode,
+    set: (channelId, mode) => debugChannelsMap.set(channelId, mode),
+    delete: (channelId) => debugChannelsMap.delete(channelId),
+    has: (channelId) => debugChannelsMap.has(channelId) || DEFAULT_DEBUG_MODE !== null
+};
 
 export async function execute(req, res) {
     const { data: commandData, channel_id } = req.body;
@@ -27,9 +50,9 @@ export async function execute(req, res) {
     const mode = modeOption ? modeOption.value : 'off';
 
     if (mode === 'off') {
-        debugChannels.delete(channel_id);
+        debugChannelsMap.delete(channel_id);
     } else {
-        debugChannels.set(channel_id, mode);
+        debugChannelsMap.set(channel_id, mode);
     }
 
     const modeMessages = {
@@ -38,10 +61,13 @@ export async function execute(req, res) {
         full: '📋 Debug mode **FULL** enabled - Showing input + output.',
     };
 
+    let content = modeMessages[mode];
+    if (DEFAULT_DEBUG_MODE && mode === 'off') {
+        content += `\n*(Note: DEFAULT_DEBUG_MODE="${DEFAULT_DEBUG_MODE}" will still apply)*`;
+    }
+
     return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-            content: modeMessages[mode],
-        },
+        data: { content },
     });
 }
