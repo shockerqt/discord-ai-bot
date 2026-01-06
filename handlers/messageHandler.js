@@ -53,8 +53,9 @@ export async function handlePassiveMessage(messages) {
     console.log(fullContent);
     console.log("----------------------------");
 
-    // Debug: Echo Input to Chat
-    if (debugChannels.has(contextId)) {
+    // Debug: Echo Input to Chat (only in 'full' mode)
+    const debugMode = debugChannels.get(contextId);
+    if (debugMode === 'full') {
         const debugInputContent = `RNG: ${debugRngInfo}\n\n${fullContent}`;
         const buffer = Buffer.from('\uFEFF' + debugInputContent, 'utf-8');
         try {
@@ -120,8 +121,48 @@ export async function handlePassiveMessage(messages) {
         console.log("-----------------------");
 
         // Debug Mode Output
-        if (debugChannels.has(contextId)) {
+        if (debugMode === 'full') {
             await sendDebugOutput(lastMessage.channel, debugRngInfo, contentStr);
+        } else if (debugMode === 'thoughts') {
+            // Extract only the THOUGHT section
+            const thoughtMatch = contentStr.match(/<THOUGHT>([\s\S]*?)<\/THOUGHT>/i);
+            if (thoughtMatch) {
+                // Word wrap for better Discord preview (80 chars)
+                const wrapText = (text, width = 80) => {
+                    const lines = text.split('\n');
+                    return lines.map(line => {
+                        if (line.length <= width) return line;
+                        const words = line.split(' ');
+                        let result = '';
+                        let currentLine = '';
+                        for (const word of words) {
+                            if ((currentLine + ' ' + word).trim().length <= width) {
+                                currentLine = (currentLine + ' ' + word).trim();
+                            } else {
+                                if (currentLine) result += currentLine + '\n';
+                                currentLine = word;
+                            }
+                        }
+                        if (currentLine) result += currentLine;
+                        return result;
+                    }).join('\n');
+                };
+
+                const thoughtContent = wrapText(thoughtMatch[1].trim());
+                const buffer = Buffer.from('\uFEFF' + thoughtContent, 'utf-8');
+                try {
+                    await lastMessage.channel.send({
+                        content: `**[💭 THOUGHT]**`,
+                        files: [{
+                            attachment: buffer,
+                            name: `thought-${Date.now()}.txt`
+                        }],
+                        reply: { messageReference: lastMessage.id }
+                    });
+                } catch (err) {
+                    console.error("Failed to send thought attachment:", err);
+                }
+            }
         }
 
         // Enviar mensaje de texto
@@ -132,7 +173,7 @@ export async function handlePassiveMessage(messages) {
 
     } catch (error) {
         console.error("Error calling Mistral:", error);
-        if (debugChannels.has(contextId)) {
+        if (debugMode) {
             await lastMessage.channel.send(`**Error**: ${error.message}`);
         }
     }
