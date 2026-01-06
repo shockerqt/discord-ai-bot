@@ -179,3 +179,24 @@ PENDING: [Lian] (ID:207) "Te voy a golpear por argentina, niegas tus raices"
 </DECISIONS>
 <REASON>Retoma su propia pregunta anterior ("por que hablas como argentina") tras varios mensajes de ruido. La acusación "niegas tus raices" cierra la idea iniciada en MsgID:201.</REASON>
 ```
+
+**Input:**
+--- CONVERSATION HISTORY (Context) ---
+[USER]: [Lian] (MsgID:300) "Si tuvieras que hacer un cosplay, de quien seria?"
+[ASSISTANT]: (MsgID:301) [Lumi]: "de Sally (El extraño mundo de Jack), pero solo si me dejan llevar un peluche de foca..."
+[USER]: [Lian] (MsgID:302) "Y porque de una roca"
+[USER]: [Lian] (MsgID:303) "Foca*"
+[USER]: [Lian] (MsgID:304) "Y si no fuera Sally?"
+PENDING: [Lian] (ID:302) "Y porque de una roca"
+PENDING: [Lian] (ID:303) "Foca*"
+PENDING: [Lian] (ID:304) "Y si no fuera Sally?"
+
+**Output:**
+```xml
+<DECISIONS>
+    <MSG id="302" action="RESPONDER" />
+    <MSG id="303" action="IGNORAR" />
+    <MSG id="304" action="RESPONDER" />
+</DECISIONS>
+<REASON>ID:302 pide justificación sobre un elemento de la respuesta anterior (contexto "foca" corregido en 303). ID:304 es otra pregunta de seguimiento directa ("Y si no fuera..."). Ambas requieren respuesta.</REASON>
+```
