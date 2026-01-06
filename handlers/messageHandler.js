@@ -10,9 +10,7 @@ import {
     addAssistantMessage,
     getUnprocessedMessages,
     updateMessageStatus,
-    MSG_STATUS,
-    addAssistantPlaceholder,
-    resolveAssistantMessage
+    MSG_STATUS
 } from '../utils/messageStore.js';
 import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
@@ -199,11 +197,8 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
     // Start tracking generation
     generatingChannels.add(contextId);
 
-    // IMPORTANT: Get formatted history for Lumi (Before placeholder)
+    // IMPORTANT: Get formatted history for Lumi
     const history = getFormattedHistory(contextId);
-
-    // Reserve spot in history immediately
-    const placeholderId = addAssistantPlaceholder(contextId);
 
     console.log(`[Trigger] Lumi response for ${contextId}. Targets: ${targetIds.join(',')}`);
 
@@ -220,12 +215,7 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
 
         const parsed = parseAIResponse(rawResponse);
         if (parsed.send_text && parsed.text_content) {
-            resolveAssistantMessage(contextId, placeholderId, parsed.text_content);
-        } else {
-            // If no text response, maybe resolve as empty or remove?
-            // Let's resolve as empty to keep order consistency or just mark processed logic.
-            // For now, assume resolved empty.
-            resolveAssistantMessage(contextId, placeholderId, '*[Reacción]*');
+            addAssistantMessage(contextId, parsed.text_content);
         }
 
         await handleDebugOutput(debugMode, channel, lastMessage, rawResponse);
