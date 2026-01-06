@@ -1,60 +1,160 @@
 /**
  * Message Handler - Maneja mensajes pasivos del bot
- * Usa cadena de agentes: Decision Agent -> Lumi
- * Usa completions API con mensajes en memoria
+ * Pipeline: Decision Agent -> Lumi Agent -> Discord Response
  */
 import { Mistral } from '@mistralai/mistralai';
 import { getOmniAgentId, getDecisionAgentId } from '../utils/agentManager.js';
 import { getMessages, addUserMessage, addAssistantMessage } from '../utils/messageStore.js';
 import { debugChannels } from '../commands/debug.js';
-
-// Importar módulos del handler
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
 /**
- * Llama al agente de decisión para determinar si Lumi debe responder
- * @param {string} messageContent - Contenido del mensaje a evaluar
- * @returns {Promise<{shouldRespond: boolean, reason: string}>}
+ * Word wrap text for better Discord preview
  */
-async function callDecisionAgent(messageContent) {
-    try {
-        const decisionAgentId = await getDecisionAgentId();
-
-        const response = await client.beta.agents.complete({
-            agentId: decisionAgentId,
-            messages: [{ role: 'user', content: messageContent }]
-        });
-
-        const content = response.choices?.[0]?.message?.content || '';
-
-        // Parse decision
-        const decisionMatch = content.match(/<DECISION>(.*?)<\/DECISION>/i);
-        const reasonMatch = content.match(/<REASON>(.*?)<\/REASON>/i);
-
-        const decision = decisionMatch ? decisionMatch[1].trim().toUpperCase() : 'IGNORAR';
-        const reason = reasonMatch ? reasonMatch[1].trim() : 'Sin razón';
-
-        return {
-            shouldRespond: decision === 'RESPONDER',
-            reason: reason,
-            rawResponse: content
-        };
-    } catch (error) {
-        console.error("Error calling decision agent:", error);
-        // En caso de error, ignorar por seguridad
-        return { shouldRespond: false, reason: 'Error en agente de decisión', rawResponse: '' };
-    }
+function wrapText(text, width = 80) {
+    return text.split('\n').map(line => {
+        if (line.length <= width) return line;
+        const words = line.split(' ');
+        let result = '', currentLine = '';
+        for (const word of words) {
+            if ((currentLine + ' ' + word).trim().length <= width) {
+                currentLine = (currentLine + ' ' + word).trim();
+            } else {
+                if (currentLine) result += currentLine + '\n';
+                currentLine = word;
+            }
+        }
+        return result + currentLine;
+    }).join('\n');
 }
 
 /**
- * Maneja mensajes pasivos del chat
- * @param {Object|Object[]} messages - Mensaje o array de mensajes de Discord
+ * Build message context from Discord messages
+ */
+function buildMessageContext(msgs) {
+    const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' });
+    return msgs.map(msg => {
+        const author = msg.member?.displayName || msg.author.username;
+        return `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${author}: ${msg.content}`;
+    }).join('\n');
+}
+
+/**
+ * Send a debug attachment to Discord
+ */
+async function sendDebugAttachment(channel, label, content, replyTo = null) {
+    const buffer = Buffer.from('\uFEFF' + content, 'utf-8');
+    const options = {
+        content: `**[${label}]**`,
+        files: [{ attachment: buffer, name: `${label.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.txt` }]
+    };
+    if (replyTo) options.reply = { messageReference: replyTo };
+
+    try {
+        await channel.send(options);
+    } catch (err) {
+        console.error(`Failed to send ${label} debug:`, err);
+    }
+}
+
+// ============================================================================
+// DECISION AGENT
+// ============================================================================
+
+/**
+ * Call the decision agent to determine if Lumi should respond
+ * @param {Array} history - Previous messages in the channel
+ * @param {string} currentMessage - Current message content
+ */
+async function callDecisionAgent(history, currentMessage) {
+    // Build context with history
+    let contextContent = '';
+    if (history.length > 0) {
+        contextContent += '--- CONVERSATION HISTORY ---\n';
+        contextContent += history.map(m => `[${m.role}]: ${m.content}`).join('\n');
+        contextContent += '\n\n';
+    }
+    contextContent += '--- CURRENT MESSAGE ---\n';
+    contextContent += currentMessage;
+
+    try {
+        const agentId = await getDecisionAgentId();
+        const response = await client.beta.agents.complete({
+            agentId,
+            messages: [{ role: 'user', content: contextContent }]
+        });
+
+        const content = response.choices?.[0]?.message?.content || '';
+        const decisionMatch = content.match(/<DECISION>(.*?)<\/DECISION>/i);
+        const reasonMatch = content.match(/<REASON>(.*?)<\/REASON>/i);
+
+        return {
+            shouldRespond: (decisionMatch?.[1]?.trim().toUpperCase() === 'RESPONDER'),
+            reason: reasonMatch?.[1]?.trim() || 'Sin razón',
+            rawResponse: content,
+            contextSent: contextContent
+        };
+    } catch (error) {
+        console.error("Decision agent error:", error);
+        return { shouldRespond: false, reason: 'Error en agente', rawResponse: '', contextSent: contextContent };
+    }
+}
+
+// ============================================================================
+// LUMI AGENT
+// ============================================================================
+
+/**
+ * Call the main Lumi agent with conversation history
+ */
+async function callLumiAgent(contextId) {
+    const agentId = await getOmniAgentId();
+    const messages = getMessages(contextId);
+
+    const response = await client.beta.agents.complete({
+        agentId,
+        messages
+    });
+
+    return response.choices?.[0]?.message?.content || '';
+}
+
+// ============================================================================
+// DEBUG HANDLERS
+// ============================================================================
+
+/**
+ * Handle debug output based on mode
+ */
+async function handleDebugOutput(debugMode, channel, lastMessage, contentStr) {
+    if (debugMode === 'full') {
+        await sendDebugOutput(channel, 'Completions API', contentStr);
+    } else if (debugMode === 'thoughts') {
+        const thoughtMatch = contentStr.match(/<THOUGHT>([\s\S]*?)<\/THOUGHT>/i);
+        if (thoughtMatch) {
+            const wrappedThought = wrapText(thoughtMatch[1].trim());
+            await sendDebugAttachment(channel, '💭 THOUGHT', wrappedThought, lastMessage.id);
+        }
+    }
+}
+
+// ============================================================================
+// MAIN HANDLER
+// ============================================================================
+
+/**
+ * Main entry point for passive message handling
+ * Pipeline: Decision -> Lumi -> Response
  */
 export async function handlePassiveMessage(messages) {
-    // Ensure array
+    // Normalize to array
     const msgs = Array.isArray(messages) ? messages : [messages];
     if (msgs.length === 0) return;
 
@@ -62,156 +162,79 @@ export async function handlePassiveMessage(messages) {
     const contextId = lastMessage.channel.id;
     const debugMode = debugChannels.get(contextId);
 
-    // Construct Context from Batch
-    const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' });
-    let messageContent = "";
+    // Build message context
+    const messageContent = buildMessageContext(msgs);
 
-    for (const msg of msgs) {
-        const authorName = msg.member ? msg.member.displayName : msg.author.username;
-        messageContent += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${authorName}: ${msg.content}\n`;
-    }
-
-    // 1. Call Decision Agent
-    console.log("--- CALLING DECISION AGENT ---");
-    const decision = await callDecisionAgent(messageContent);
+    // ========== STEP 1: Decision Agent ==========
+    console.log("--- DECISION AGENT ---");
+    const history = getMessages(contextId);
+    const decision = await callDecisionAgent(history, messageContent);
     console.log(`Decision: ${decision.shouldRespond ? 'RESPONDER' : 'IGNORAR'} - ${decision.reason}`);
 
-    // Debug: Show decision
     if (debugMode === 'full') {
-        const decisionContent = `DECISION: ${decision.shouldRespond ? 'RESPONDER' : 'IGNORAR'}\nREASON: ${decision.reason}\n\n--- RAW ---\n${decision.rawResponse}`;
-        const buffer = Buffer.from('\uFEFF' + decisionContent, 'utf-8');
-        try {
-            await lastMessage.channel.send({
-                content: `**[🧠 DECISION AGENT]**`,
-                files: [{
-                    attachment: buffer,
-                    name: `decision-${Date.now()}.txt`
-                }],
-                reply: { messageReference: lastMessage.id }
-            });
-        } catch (err) {
-            console.error("Failed to send decision debug:", err);
-        }
+        const decisionDebug = `========== DECISION CHAIN ==========
+
+[INPUT TO DECISION AGENT]
+${decision.contextSent}
+
+[DECISION AGENT OUTPUT]
+${decision.rawResponse}
+
+[PARSED RESULT]
+DECISION: ${decision.shouldRespond ? 'RESPONDER' : 'IGNORAR'}
+REASON: ${decision.reason}`;
+        await sendDebugAttachment(lastMessage.channel, '🧠 DECISION CHAIN', decisionDebug, lastMessage.id);
     }
 
-    // 2. If decision is IGNORAR, stop here
     if (!decision.shouldRespond) {
-        console.log("[Decision Agent] Ignoring message.");
+        console.log("[Decision] Ignoring message.");
         return;
     }
 
-    // 3. Add user message to history
+    // ========== STEP 2: Add to History ==========
     addUserMessage(contextId, messageContent);
 
-    // 4. Call Lumi (main agent) using completions API
-    console.log("--- CALLING LUMI AGENT ---");
-
-    // Debug: Echo Input to Chat (only in 'full' mode)
     if (debugMode === 'full') {
-        const historyMessages = getMessages(contextId);
-        const historyContent = historyMessages.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
-        const buffer = Buffer.from('\uFEFF' + historyContent, 'utf-8');
-        try {
-            await lastMessage.channel.send({
-                content: `**[DEBUG INPUT]** (${historyMessages.length} messages in history)`,
-                files: [{
-                    attachment: buffer,
-                    name: `debug-input-${Date.now()}.txt`
-                }]
-            });
-        } catch (err) {
-            console.error("Failed to send debug input attachment:", err);
-        }
+        const historyForDebug = getMessages(contextId);
+        const historyDebug = historyForDebug.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
+        await sendDebugAttachment(lastMessage.channel, `DEBUG INPUT (${historyForDebug.length} msgs)`, historyDebug);
     }
 
+    // ========== STEP 3: Lumi Agent ==========
+    console.log("--- LUMI AGENT ---");
+
     try {
-        const agentId = await getOmniAgentId();
-        const historyMessages = getMessages(contextId);
+        const rawResponse = await callLumiAgent(contextId);
 
-        // Call completions API with message history
-        const response = await client.beta.agents.complete({
-            agentId: agentId,
-            messages: historyMessages
-        });
-
-        const contentStr = response.choices?.[0]?.message?.content || '';
-
-        if (!contentStr) {
-            console.log("[DEBUG] Empty content extracted. Full Response:", JSON.stringify(response, null, 2));
+        if (!rawResponse) {
+            console.log("[Lumi] Empty response received.");
             return;
         }
 
         console.log("--- RAW RESPONSE ---");
-        console.log(contentStr);
-        console.log("--------------------");
+        console.log(rawResponse);
 
-        // Parsear respuesta usando el módulo
-        const parsedResponse = parseAIResponse(contentStr);
+        // ========== STEP 4: Parse Response ==========
+        const parsed = parseAIResponse(rawResponse);
+        console.log("--- PARSED ---", parsed);
 
-        console.log("--- PARSED RESPONSE ---");
-        console.log(parsedResponse);
-        console.log("-----------------------");
-
-        // 5. Add ONLY the visible response to history (not the full XML with thoughts)
-        if (parsedResponse.send_text && parsedResponse.text_content) {
-            addAssistantMessage(contextId, parsedResponse.text_content);
+        // ========== STEP 5: Save to History ==========
+        if (parsed.send_text && parsed.text_content) {
+            addAssistantMessage(contextId, parsed.text_content);
         }
 
-        // Debug Mode Output
-        if (debugMode === 'full') {
-            await sendDebugOutput(lastMessage.channel, 'Completions API', contentStr);
-        } else if (debugMode === 'thoughts') {
-            // Extract only the THOUGHT section
-            const thoughtMatch = contentStr.match(/<THOUGHT>([\s\S]*?)<\/THOUGHT>/i);
-            if (thoughtMatch) {
-                // Word wrap for better Discord preview (80 chars)
-                const wrapText = (text, width = 80) => {
-                    const lines = text.split('\n');
-                    return lines.map(line => {
-                        if (line.length <= width) return line;
-                        const words = line.split(' ');
-                        let result = '';
-                        let currentLine = '';
-                        for (const word of words) {
-                            if ((currentLine + ' ' + word).trim().length <= width) {
-                                currentLine = (currentLine + ' ' + word).trim();
-                            } else {
-                                if (currentLine) result += currentLine + '\n';
-                                currentLine = word;
-                            }
-                        }
-                        if (currentLine) result += currentLine;
-                        return result;
-                    }).join('\n');
-                };
+        // ========== STEP 6: Debug Output ==========
+        await handleDebugOutput(debugMode, lastMessage.channel, lastMessage, rawResponse);
 
-                const thoughtContent = wrapText(thoughtMatch[1].trim());
-                const buffer = Buffer.from('\uFEFF' + thoughtContent, 'utf-8');
-                try {
-                    await lastMessage.channel.send({
-                        content: `**[💭 THOUGHT]**`,
-                        files: [{
-                            attachment: buffer,
-                            name: `thought-${Date.now()}.txt`
-                        }],
-                        reply: { messageReference: lastMessage.id }
-                    });
-                } catch (err) {
-                    console.error("Failed to send thought attachment:", err);
-                }
-            }
-        }
-
-        // Enviar mensaje de texto
-        await sendTextMessage(lastMessage.channel, parsedResponse);
-
-        // Enviar reacciones
-        await sendReactions(lastMessage, parsedResponse.reaction);
+        // ========== STEP 7: Send Response ==========
+        await sendTextMessage(lastMessage.channel, parsed);
+        await sendReactions(lastMessage, parsed.reaction);
 
     } catch (error) {
-        console.error("Error calling Mistral:", error);
+        console.error("Lumi agent error:", error);
         if (debugMode) {
             await lastMessage.channel.send(`**Error**: ${error.message}`);
         }
     }
 }
+

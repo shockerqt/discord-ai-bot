@@ -1,4 +1,4 @@
-import { getActiveConversations, clearAllConversations } from '../utils/conversationStore.js';
+import { getMessages, clearMessages, getMessageCount, getActiveChannels } from '../utils/messageStore.js';
 import { InteractionResponseType } from 'discord-interactions';
 
 export const MEMORY_COMMAND = {
@@ -23,27 +23,37 @@ export async function memoryCommand(req, res) {
     const subCommand = data.options[0].name;
 
     if (subCommand === 'view') {
-        const activeConvos = getActiveConversations();
-        const channels = Object.keys(activeConvos);
+        const channels = getActiveChannels();
         const count = channels.length;
 
-        let message = `**Memory Status**\nActive Conversations: **${count}**\n`;
+        let totalMessages = 0;
+        const channelInfo = channels.map(id => {
+            const msgCount = getMessageCount(id);
+            totalMessages += msgCount;
+            return `<#${id}> (${msgCount} msgs)`;
+        });
+
+        let message = `**Memory Status**\nActive Channels: **${count}**\nTotal Messages: **${totalMessages}**\n`;
         if (count > 0) {
-            message += `Channels: ${channels.map(id => `<#${id}>`).join(', ')}`;
+            message += `\n${channelInfo.join('\n')}`;
         }
 
         return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
                 content: message,
-                flags: 64, // Ephemeral (only visible to user) to properly handle privacy/spam
+                flags: 64, // Ephemeral
             },
         });
     }
 
     if (subCommand === 'clear_all') {
-        const count = Object.keys(getActiveConversations()).length;
-        clearAllConversations();
+        const channels = getActiveChannels();
+        const count = channels.length;
+
+        for (const channelId of channels) {
+            clearMessages(channelId);
+        }
 
         return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,

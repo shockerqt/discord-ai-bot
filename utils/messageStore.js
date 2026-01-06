@@ -6,8 +6,18 @@
 // Map<channelId, Array<{role: 'user'|'assistant', content: string}>>
 const channelMessages = new Map();
 
+// Track active channels
+const activeChannels = new Set();
+
 // Límite de mensajes en memoria por canal
 const MAX_MESSAGES = 50;
+
+/**
+ * Get all active channel IDs
+ */
+export function getActiveChannels() {
+    return Array.from(activeChannels);
+}
 
 /**
  * Obtiene los mensajes de un canal
@@ -27,6 +37,7 @@ export function getMessages(channelId) {
  * @param {string} content - Contenido del mensaje
  */
 export function addUserMessage(channelId, content) {
+    activeChannels.add(channelId);
     const messages = getMessages(channelId);
     messages.push({ role: 'user', content });
 
