@@ -231,9 +231,9 @@ export async function handlePassiveMessage(messages) {
     const contextId = lastMessage.channel.id;
     const debugMode = getDebugMode(contextId);
 
-    // 1. Save messages (Status: PENDING) -> Now handled in discordClient.js
-    // const userMsgs = extractUserMessages(msgs);
-    // addUserMessages(contextId, userMsgs);
+    // 1. Save messages (Status: PENDING)
+    const userMsgs = extractUserMessages(msgs);
+    addUserMessages(contextId, userMsgs);
 
     // 2. Get all Unprocessed
     const unprocessed = getUnprocessedMessages(contextId);
