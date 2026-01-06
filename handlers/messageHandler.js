@@ -20,6 +20,9 @@ import { scheduleResponse, cancelPendingResponse } from '../utils/responseSchedu
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 const MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
 
+// Track active generation
+const generatingChannels = new Set();
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
