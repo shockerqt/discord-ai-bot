@@ -4,11 +4,13 @@
  */
 import * as rngTool from './rng.js';
 import * as gifTool from './gif.js';
+import * as emojiTool from './emoji.js';
 
 // Add new tools here
 const tools = {
     'rng_tool': rngTool,
-    'gif_tool': gifTool
+    'gif_tool': gifTool,
+    'emoji_tool': emojiTool
 };
 
 /**
