@@ -9,9 +9,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const CONFIG_PATH = join(__dirname, '../config.xml');
 
-console.log('[ConfigStore] CWD:', process.cwd());
-console.log('[ConfigStore] Resolving config path to:', CONFIG_PATH);
-
 // Default values
 const DEFAULT_CONFIG = {
     temperature: 0.7,
