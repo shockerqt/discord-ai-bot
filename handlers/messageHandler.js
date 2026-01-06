@@ -167,7 +167,11 @@ async function callLumiAgent(historyMessages, targetIds = []) {
 
     // Inject focus instructions if IDs present
     if (targetIds && targetIds.length > 0) {
-        systemContent += `\n\nSYSTEM UPDATE: You are responding to a batch of messages. Focus specifically on these message IDs: ${targetIds.join(', ')}.`;
+        if (targetIds.length === 1) {
+            systemContent += `\n\nSYSTEM UPDATE: You must respond specifically to the following message (identified by MsgID in history): ${targetIds[0]}.`;
+        } else {
+            systemContent += `\n\nSYSTEM UPDATE: The following messages (identified by MsgID in history) form a single conversation sequence: ${targetIds.join(', ')}. Respond to them as a whole.`;
+        }
     }
 
     const params = getLumiParams();
@@ -268,11 +272,44 @@ export async function handlePassiveMessage(messages) {
     const waitIds = [];
     const ignoreIds = [];
 
-    decisionResult.decisions.forEach(d => {
-        if (d.action === 'RESPONDER') respondIds.push(d.id);
-        else if (d.action === 'ESPERAR') waitIds.push(d.id);
-        else ignoreIds.push(d.id);
-    });
+    // Map decisions for easy lookup
+    const decisionMap = new Map();
+    decisionResult.decisions.forEach(d => decisionMap.set(d.id, d.action));
+
+    // Iterate IN ORDER based on unprocessed list to ensure sequence reconstruction
+    let activeSequence = [];
+
+    for (const msg of unprocessed) {
+        const action = decisionMap.get(msg.id) || 'IGNORAR';
+
+        if (action === 'COMBINADO') {
+            activeSequence.push(msg.id);
+        } else if (action === 'RESPONDER') {
+            activeSequence.push(msg.id);
+            // Flush sequence to respondIds
+            respondIds.push(...activeSequence);
+            activeSequence = [];
+        } else if (action === 'ESPERAR') {
+            // If unexpected sequence before WAIT, queue them for wait too
+            if (activeSequence.length > 0) {
+                waitIds.push(...activeSequence);
+                activeSequence = [];
+            }
+            waitIds.push(msg.id);
+        } else { // IGNORAR
+            if (activeSequence.length > 0) {
+                // If sequence broken by ignore, just ignore the orphans
+                ignoreIds.push(...activeSequence);
+                activeSequence = [];
+            }
+            ignoreIds.push(msg.id);
+        }
+    }
+
+    // Handle trailing orphans (COMBINADO without RESPONDER) -> WAIT
+    if (activeSequence.length > 0) {
+        waitIds.push(...activeSequence);
+    }
 
     // Update States
     if (respondIds.length > 0) updateMessageStatus(contextId, respondIds, MSG_STATUS.PROCESSED);
