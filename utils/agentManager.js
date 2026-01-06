@@ -19,12 +19,32 @@ const DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_
 /**
  * Get Lumi's full system message (base instructions + personality)
  */
-export function getLumiSystemMessage() {
+/**
+ * Get Lumi's full system message (base instructions + personality + dynamic context)
+ * @param {Object} context - Optional context { client, channel, guild }
+ */
+export function getLumiSystemMessage(context = {}) {
+    let instructions = BASE_INSTRUCTIONS;
     const personality = getPersonality();
+
     if (personality) {
-        return `${BASE_INSTRUCTIONS}\n\n---\n\n${personality}`;
+        instructions += `\n\n---\n\n${personality}`;
     }
-    return BASE_INSTRUCTIONS;
+
+    // Dynamic Emoji Injection
+    if (context.guild || (context.channel && context.channel.guild)) {
+        const guild = context.guild || context.channel.guild;
+        // Basic Cache-based fetch (sync). For deep reliability we might want async fetch outside, 
+        // but system message generation is usually sync.
+        // We assume bot has cached emojis on startup/activity.
+        const emojis = guild.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`).slice(0, 100); // Limit to 100 to avoid token overload
+
+        if (emojis.length > 0) {
+            instructions += `\n\n## EMOJIS DISPONIBLES\nPuedes usar cualquier emoji estándar de Unicode (ej: 🔥, 😂).\nTAMBIÉN puedes usar los siguientes emojis personalizados del servidor:\n${emojis.join(', ')}`;
+        }
+    }
+
+    return instructions;
 }
 
 /**

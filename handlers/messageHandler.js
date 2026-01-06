@@ -160,8 +160,8 @@ import { getToolDefinitions, executeTool } from '../utils/tools/registry.js';
 /**
  * Call Lumi Agent with Tool Support
  */
-async function callLumiAgent(historyMessages, targetIds = []) {
-    let systemContent = getLumiSystemMessage();
+async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
+    let systemContent = getLumiSystemMessage(context);
 
     // Inject focus instructions if IDs present
     if (targetIds && targetIds.length > 0) {
@@ -269,9 +269,15 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
 
     // DEBUG: Full trace
     if (debugMode === 'full') {
-        // Removed System Message from debug output to reduce noise
+        let systemMsg = getLumiSystemMessage(promptContext);
+        if (targetIds.length > 0) systemMsg += `\n\n[REPLY TO MESSAGE_IDs]: ${targetIds.join(', ')}`;
+
+        // System Prompt Attachment
+        await sendDebugAttachment(channel, `⚙️ LUMI SYSTEM PROMPT`, systemMsg);
+
+        // Input History Attachment (No system prompt)
         const historyDebug = history.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
-        await sendDebugAttachment(channel, `🤖 LUMI INPUT`, historyDebug);
+        await sendDebugAttachment(channel, `🤖 LUMI INPUT HISTORY`, historyDebug);
     }
 
     try {

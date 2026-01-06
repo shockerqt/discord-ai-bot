@@ -4,13 +4,12 @@
  */
 import * as rngTool from './rng.js';
 import * as gifTool from './gif.js';
-import * as emojiTool from './emoji.js';
+// import * as emojiTool from './emoji.js'; // Deprecated in favor of System Prompt Injection
 
 // Add new tools here
 const tools = {
     'rng_tool': rngTool,
-    'gif_tool': gifTool,
-    'emoji_tool': emojiTool
+    'gif_tool': gifTool
 };
 
 /**
