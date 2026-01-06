@@ -4,16 +4,37 @@
 
 /**
  * Resuelve un nombre de emoji (shortcode) a su formato completo <...>
+ * Soporta coincidencia parcial (fuzzy) si el nombre exacto no existe.
  */
 function resolveEmoji(name, guild, client) {
+    const target = name.toLowerCase();
+
+    const findEmoji = (collection) => {
+        if (!collection) return null;
+        // 1. Exact Match
+        let match = collection.find(e => e.name === name);
+        if (match) return match;
+
+        // 2. Case Insensitive Match
+        match = collection.find(e => e.name.toLowerCase() === target);
+        if (match) return match;
+
+        // 3. Fuzzy Match (Ends with - helpful for "123name" -> "name")
+        match = collection.find(e => e.name.toLowerCase().endsWith(target));
+        if (match) return match;
+
+        // 4. Broad Fuzzy (Includes)
+        return collection.find(e => e.name.toLowerCase().includes(target));
+    };
+
     // 1. Check Guild
     if (guild) {
-        const guildEmoji = guild.emojis.cache.find(e => e.name === name);
-        if (guildEmoji) return guildEmoji.toString(); // <a:name:id> or <:name:id>
+        const guildEmoji = findEmoji(guild.emojis.cache);
+        if (guildEmoji) return guildEmoji.toString();
     }
     // 2. Check App
     if (client && client.application) {
-        const appEmoji = client.application.emojis.cache.find(e => e.name === name);
+        const appEmoji = findEmoji(client.application.emojis.cache);
         if (appEmoji) return `${appEmoji.animated ? '<a:' : '<:'}${appEmoji.name}:${appEmoji.id}>`;
     }
     return null;
