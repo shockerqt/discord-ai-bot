@@ -1,90 +1,71 @@
-import { Mistral } from '@mistralai/mistralai';
-import { getConversationId } from '../utils/conversationStore.js';
+import { getMessages, getMessageCount } from '../utils/messageStore.js';
 import { InteractionResponseType } from 'discord-interactions';
-
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 
 export const data = {
     name: 'history',
-    description: 'Download the full conversation history for this channel.',
+    description: 'Download the conversation history for this channel.',
     type: 1, // CHAT_INPUT
 };
 
 export async function execute(req, res) {
-    const { channel_id } = req.body;
+    const { channel_id, application_id, token } = req.body;
 
-    // 1. Get Conversation ID
-    const conversationId = getConversationId(channel_id);
+    // Get messages from memory
+    const messages = getMessages(channel_id);
+    const count = getMessageCount(channel_id);
 
-    if (!conversationId) {
+    if (count === 0) {
         return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                content: "No active conversation found for this channel.",
+                content: "No conversation history found for this channel.",
             },
         });
     }
 
-    // Defer response because fetching might take a moment
-    await res.send({
+    // Defer response
+    res.send({
         type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
     });
 
     try {
-        // 2. Fetch Messages from Mistral Beta API
-        const messages = await client.beta.conversations.getMessages({
-            conversationId: conversationId,
-        });
+        // Format as readable text
+        const historyText = messages.map((m, i) => {
+            const role = m.role === 'user' ? '👤 USER' : '🤖 ASSISTANT';
+            return `--- Message ${i + 1} [${role}] ---\n${m.content}`;
+        }).join('\n\n');
 
-        // 3. Format as JSON string
-        const jsonHistory = JSON.stringify(messages, null, 2);
-        const buffer = Buffer.from(jsonHistory, 'utf-8');
+        const buffer = Buffer.from('\uFEFF' + historyText, 'utf-8');
 
-        // 4. Send as File via Discord Client (since we can't easily upload files via the interaction response token without multipart complexity, using the client is easier)
-        // We need to import the client. Wait, chat.js doesn't import 'discordClient' but 'app.js' does.
-        // Let's rely on the global 'discordClient.js' export if possible, or pass it?
-        // Actually, we can import { client as discordClient } from '../discordClient.js';
-
-        // Dynamic import to avoid circular dep issues if any, or just standard import.
-        // Using standard import.
+        // Send via Discord Client
         const { client: discordClient } = await import('../discordClient.js');
 
         const channel = await discordClient.channels.fetch(channel_id);
         if (!channel) {
-            throw new Error("Channel not found locally.");
+            throw new Error("Channel not found.");
         }
 
         await channel.send({
-            content: `**Conversation History**\n**ID**: \`${conversationId}\``,
+            content: `**Conversation History** (${count} messages)`,
             files: [{
                 attachment: buffer,
-                name: `history-${conversationId}.json`
+                name: `history-${channel_id}-${Date.now()}.txt`
             }]
         });
 
-        // We already deferred, so we don't need to "reply" to the interaction webhhook if the channel send works. 
-        // But to be clean, we should update the original interaction or just let it succeed silently?
-        // Discord will show "Thinking..." until we edit the original response.
-        // Let's edit the original interaction to say "Sent!"
-
-        // We can use the discordClient to edit the interaction reply too if we have the token, but simpler is:
-        // We can't use `res.send` again.
-        // We can use `DiscordRequest` to patch the original interaction.
-
-        const { application_id, token } = req.body;
+        // Update deferred response
         const { DiscordRequest } = await import('../utils.js');
         await DiscordRequest(`webhooks/${application_id}/${token}/messages/@original`, {
             method: 'PATCH',
-            body: { content: "History dumped! (See attachment below)" }
+            body: { content: "History exported! (See attachment below)" }
         });
 
     } catch (error) {
-        console.error("Error fetching history:", error);
-        const { application_id, token } = req.body;
+        console.error("Error exporting history:", error);
         const { DiscordRequest } = await import('../utils.js');
         await DiscordRequest(`webhooks/${application_id}/${token}/messages/@original`, {
             method: 'PATCH',
-            body: { content: `Failed to fetch history: ${error.message}` }
+            body: { content: `Failed to export history: ${error.message}` }
         });
     }
 }
