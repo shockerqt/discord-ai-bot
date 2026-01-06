@@ -24,4 +24,17 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+client.on('ready', async () => {
+    console.log(`[Discord] Logged in as ${client.user.tag}!`);
+    try {
+        if (client.application) {
+            console.log('[Discord] Fetching application emojis...');
+            await client.application.emojis.fetch();
+            console.log(`[Discord] Fetched ${client.application.emojis.cache.size} application emojis.`);
+        }
+    } catch (e) {
+        console.error('[Discord] Failed to fetch app emojis:', e);
+    }
+});
+
 export { client };

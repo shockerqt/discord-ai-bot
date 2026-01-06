@@ -32,16 +32,36 @@ export function getLumiSystemMessage(context = {}) {
     }
 
     // Dynamic Emoji Injection
+    // Dynamic Emoji Injection
+    // Collect from Guild AND Application
+    const allEmojis = [];
+
+    // 1. App Emojis
+    if (context.client && context.client.application) {
+        const appEmojis = context.client.application.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`);
+        allEmojis.push(...appEmojis);
+        console.log(`[SystemPrompt] App emojis found: ${appEmojis.length}`);
+    }
+
+    // 2. Guild Emojis
     if (context.guild || (context.channel && context.channel.guild)) {
         const guild = context.guild || context.channel.guild;
-        // Basic Cache-based fetch (sync). For deep reliability we might want async fetch outside, 
-        // but system message generation is usually sync.
-        // We assume bot has cached emojis on startup/activity.
-        const emojis = guild.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`).slice(0, 100); // Limit to 100 to avoid token overload
+        console.log(`[SystemPrompt] Injecting emojis for guild: ${guild.name} (${guild.id})`);
 
-        if (emojis.length > 0) {
-            instructions += `\n\n## EMOJIS DISPONIBLES\nPuedes usar cualquier emoji estándar de Unicode (ej: 🔥, 😂).\nTAMBIÉN puedes usar los siguientes emojis personalizados del servidor:\n${emojis.join(', ')}`;
-        }
+        const guildEmojis = guild.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`);
+        allEmojis.push(...guildEmojis);
+        console.log(`[SystemPrompt] Guild emojis found: ${guildEmojis.length}`);
+    } else {
+        console.log('[SystemPrompt] No guild context available for emojis.');
+    }
+
+    // Combine and slice
+    const uniqueEmojiList = [...new Set(allEmojis)].slice(0, 100);
+
+    if (uniqueEmojiList.length > 0) {
+        instructions += `\n\n## EMOJIS DISPONIBLES\nPuedes usar cualquier emoji estándar de Unicode (ej: 🔥, 😂).\nTAMBIÉN puedes usar los siguientes emojis personalizados del servidor/app:\n${uniqueEmojiList.join(', ')}`;
+    } else {
+        console.log('[SystemPrompt] No emojis (guild or app) available to inject.');
     }
 
     return instructions;
