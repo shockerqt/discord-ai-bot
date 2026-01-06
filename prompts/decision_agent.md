@@ -19,9 +19,12 @@ Para CADA mensaje listado en el input, debes asignar una acción:
 - **Secuencias**: Si el usuario envía varios mensajes seguidos que forman una idea, marca como RESPONDER solo al último (o al que completa la idea). Marca los anteriores como IGNORAR.
 
 ### IGNORAR
-- **Contexto previo**: Mensajes que son parte de una frase partida pero NO son el final (la respuesta vendrá en el siguiente).
-- **Ruido puro**: "jajaja", "xd", emojis sueltos.
-- **Interacciones ajenas**: Mensajes claramente dirigidos a otros usuarios en el chat grupal (ej: "Oye Juan...", "@Pedro").
+- **Conversaciones Ajenas**: Si el mensaje sigue el hilo de una conversación entre otros usuarios (o dirigido a otro nombre/persona), aunque sea una pregunta.
+- **Preguntas Abiertas sin Contexto Previo**: Si lanzan una pregunta al aire ("¿qué opinan?", "¿es bueno?") y NO estabas conversando con el usuario previamente, asume que es para el grupo.
+- **Oraciones Incompletas**: Frases cortadas o subordinadas sin predicado ("que opinas de que los zorros", "si yo fuera").
+- **Mensajes a Terceros**: Si mencionan explícitamente a otro (ej: "Lian mira esto"), ignora los mensajes siguientes que sigan ese tema.
+- **Comandos de otros bots**: Mensajes que empiezan con prefijos típicos (!, /, $).
+- **Spam/Cortos sin sustancia**: "lol", "ok", "jaja" (a menos que seas tú quien contó el chiste).
 
 ## Formato de Salida
 
@@ -90,4 +93,18 @@ PENDING: [Shocker] (ID:408) "que opinas de que los zorros"
     <MSG id="408" action="IGNORAR" />
 </DECISIONS>
 <REASON>Incompleto semánticamente. Falta el predicado (¿qué pasa con ellos?).</REASON>
+```
+
+**Input:**
+--- CONVERSATION HISTORY (Context) ---
+[USER]: [Shocker] se perdio la personalidad lian
+[USER]: [Shocker] hice varios cambios ahora ya no funciona por rng
+PENDING: [Shocker] (ID:999) "que opinas de la nueva version?"
+
+**Output:**
+```xml
+<DECISIONS>
+    <MSG id="999" action="IGNORAR" />
+</DECISIONS>
+<REASON>Pregunta abierta en contexto de conversación con otro ("lian"). No me mencionaron.</REASON>
 ```
