@@ -48,7 +48,7 @@ export async function sendReactions(message, reactionString) {
         await message.react(emojiToReact);
         console.log(`[Reactions] Reacted with ${emojiToReact} to ${message.id}`);
     } catch (error) {
-        console.error(`Failed to react with ${reaction}: ${error.message}`);
+        console.error(`Failed to react with ${reactionString}: ${error.message}`);
     }
 }
 
