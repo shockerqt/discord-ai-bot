@@ -48,6 +48,9 @@ export function addUserMessages(channelId, userMessages) {
     const messages = getRawMessages(channelId);
 
     for (const msg of userMessages) {
+        // Prevent duplicates
+        if (messages.some(m => m.id === msg.messageId)) continue;
+
         messages.push({
             id: msg.messageId,
             role: 'user',
@@ -140,7 +143,14 @@ export function getFormattedHistory(channelId) {
         } else {
             // Assistant message
             if (currentMsg && currentMsg.role === 'user') currentMsg = null; // Break user block
-            history.push({ role: 'assistant', content: msg.content });
+
+            // Check if previous message was assistant to combine
+            const lastMsg = history.length > 0 ? history[history.length - 1] : null;
+            if (lastMsg && lastMsg.role === 'assistant') {
+                lastMsg.content += '\n\n' + msg.content;
+            } else {
+                history.push({ role: 'assistant', content: msg.content });
+            }
         }
     }
     return history;
