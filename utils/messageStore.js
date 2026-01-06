@@ -7,7 +7,8 @@
 export const MSG_STATUS = {
     PENDING: 'PENDING',     // Recién llegado
     WAITING: 'WAITING',     // Decision Agent dijo ESPERAR
-    PROCESSED: 'PROCESSED'  // Ya respondido o ignorado
+    PROCESSED: 'PROCESSED', // Ya respondido o ignorado
+    GENERATING: 'GENERATING' // Placeholder reservando lugar
 };
 
 // Map<channelId, Array<RawMessage>>
@@ -65,7 +66,41 @@ export function addUserMessages(channelId, userMessages) {
 }
 
 /**
- * Agrega mensaje de asistente (PROCESSED por defecto)
+ * Agrega un placeholder para la respuesta del asistente que se está generando
+ * Retorna el ID temporal para resolverlo luego
+ */
+export function addAssistantPlaceholder(channelId) {
+    const messages = getRawMessages(channelId);
+    const id = `asst-placeholder-${Date.now()}`;
+    messages.push({
+        id: id,
+        role: 'assistant',
+        content: '(Escribiendo...)',
+        author: 'Lumi',
+        timestamp: new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' }),
+        status: MSG_STATUS.GENERATING
+    });
+    return id;
+}
+
+/**
+ * Resuelve el placeholder con la respuesta real
+ */
+export function resolveAssistantMessage(channelId, placeholderId, content) {
+    const messages = getRawMessages(channelId);
+    const msg = messages.find(m => m.id === placeholderId);
+    if (msg) {
+        msg.content = content;
+        msg.status = MSG_STATUS.PROCESSED;
+        // Update timestamp to finish time? Or keep start time? Keep start time preserves order logic.
+    } else {
+        // Fallback if not found (should not happen)
+        addAssistantMessage(channelId, content);
+    }
+}
+
+/**
+ * Agrega mensaje de asistente (Legacy / Direct)
  */
 export function addAssistantMessage(channelId, content) {
     if (!content || content.trim() === '') return;

@@ -10,7 +10,9 @@ import {
     addAssistantMessage,
     getUnprocessedMessages,
     updateMessageStatus,
-    MSG_STATUS
+    MSG_STATUS,
+    addAssistantPlaceholder,
+    resolveAssistantMessage
 } from '../utils/messageStore.js';
 import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
@@ -124,7 +126,6 @@ async function callDecisionAgent(history, unprocessedMessages, isGenerating = fa
         const content = response.choices?.[0]?.message?.content || '';
 
         // Parse Decisions XML
-        // <MSG id="123" action="RESPONDER" />
         const decisions = [];
         const msgRegex = /<MSG\s+id="([^"]+)"\s+action="([^"]+)"\s*\/>/gi;
         let match;
@@ -135,7 +136,7 @@ async function callDecisionAgent(history, unprocessedMessages, isGenerating = fa
         const reasonMatch = content.match(/<REASON>(.*?)<\/REASON>/i);
         const reason = reasonMatch?.[1]?.trim() || 'Sin razón';
 
-        // Fallback if generic IGNORAR/ESP/RESP found but no strict XML
+        // Fallback
         if (decisions.length === 0) {
             if (content.includes('RESPONDER')) {
                 unprocessedMessages.forEach(m => decisions.push({ id: m.id, action: 'RESPONDER' }));
@@ -150,7 +151,6 @@ async function callDecisionAgent(history, unprocessedMessages, isGenerating = fa
 
     } catch (error) {
         console.error("Decision agent error:", error);
-        // Default safe action: Wait to avoid losing messages due to error
         return {
             decisions: unprocessedMessages.map(m => ({ id: m.id, action: 'ESPERAR' })),
             reason: 'Error en agente',
@@ -199,8 +199,11 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
     // Start tracking generation
     generatingChannels.add(contextId);
 
-    // IMPORTANT: Get formatted history for Lumi
+    // IMPORTANT: Get formatted history for Lumi (Before placeholder)
     const history = getFormattedHistory(contextId);
+
+    // Reserve spot in history immediately
+    const placeholderId = addAssistantPlaceholder(contextId);
 
     console.log(`[Trigger] Lumi response for ${contextId}. Targets: ${targetIds.join(',')}`);
 
@@ -217,7 +220,12 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
 
         const parsed = parseAIResponse(rawResponse);
         if (parsed.send_text && parsed.text_content) {
-            addAssistantMessage(contextId, parsed.text_content);
+            resolveAssistantMessage(contextId, placeholderId, parsed.text_content);
+        } else {
+            // If no text response, maybe resolve as empty or remove?
+            // Let's resolve as empty to keep order consistency or just mark processed logic.
+            // For now, assume resolved empty.
+            resolveAssistantMessage(contextId, placeholderId, '*[Reacción]*');
         }
 
         await handleDebugOutput(debugMode, channel, lastMessage, rawResponse);
