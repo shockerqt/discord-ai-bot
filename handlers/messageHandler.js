@@ -155,27 +155,103 @@ async function callDecisionAgent(history, unprocessedMessages) {
 /**
  * Call Lumi Agent
  */
+import { getToolDefinitions, executeTool } from '../utils/tools/registry.js';
+
+/**
+ * Call Lumi Agent with Tool Support
+ */
 async function callLumiAgent(historyMessages, targetIds = []) {
     let systemContent = getLumiSystemMessage();
 
-    // Inject focus instructions if IDs present
     // Inject focus instructions if IDs present
     if (targetIds && targetIds.length > 0) {
         systemContent += `\n\n[REPLY TO MESSAGE_IDs]: ${targetIds.join(', ')}`;
     }
 
+    const messages = [
+        { role: 'system', content: systemContent },
+        ...historyMessages
+    ];
+
     const params = getLumiParams();
-    const response = await client.chat.complete({
-        model: MODEL,
-        messages: [
-            { role: 'system', content: systemContent },
-            ...historyMessages
-        ],
-        temperature: params.temperature,
-        presence_penalty: params.presence_penalty,
-        frequency_penalty: params.frequency_penalty
-    });
-    return response.choices?.[0]?.message?.content || '';
+    const tools = getToolDefinitions();
+
+    let finished = false;
+    let finalContent = '';
+    let iterations = 0;
+    const MAX_ITERATIONS = 5;
+
+    while (!finished && iterations < MAX_ITERATIONS) {
+        iterations++;
+
+        try {
+            const response = await client.chat.complete({
+                model: MODEL,
+                messages: messages,
+                tools: tools,
+                toolChoice: 'auto',
+                temperature: params.temperature,
+                presence_penalty: params.presence_penalty,
+                frequency_penalty: params.frequency_penalty
+            });
+
+            const choice = response.choices?.[0];
+            const message = choice?.message;
+
+            if (!message) break;
+
+            // Add assistant message to history context
+            messages.push(message);
+
+            if (choice.finishReason === 'tool_calls' || message.toolCalls) {
+                // Handle Tool Calls
+                console.log(`[Tool] Processing ${message.toolCalls.length} tool calls...`);
+
+                for (const toolCall of message.toolCalls) {
+                    const funcName = toolCall.function.name;
+                    const argsString = toolCall.function.arguments;
+                    let args = {};
+
+                    try {
+                        args = JSON.parse(argsString);
+                    } catch (e) {
+                        console.error(`[Tool] Failed to parse args for ${funcName}:`, e);
+                        args = { error: 'Invalid JSON arguments' };
+                    }
+
+                    console.log(`[Tool] Executing ${funcName} with args:`, args);
+                    let result;
+                    try {
+                        result = await executeTool(funcName, args);
+                    } catch (err) {
+                        result = JSON.stringify({ error: err.message });
+                        console.error(`[Tool] Execution error:`, err);
+                    }
+
+                    // Push Tool Result
+                    messages.push({
+                        role: 'tool',
+                        name: funcName,
+                        content: result,
+                        toolCallId: toolCall.id
+                    });
+                }
+                // Loop continues to get next response from AI
+            } else {
+                // Final response
+                finalContent = message.content;
+                finished = true;
+            }
+
+        } catch (error) {
+            console.error("Error in Lumi Agent loop:", error);
+            // If error occurs, return what we have or generic error
+            // If error occurs, return what we have or generic error
+            return { response: finalContent || '', trace: messages };
+        }
+    }
+
+    return { response: finalContent || '', trace: messages };
 }
 
 // ============================================================================
@@ -191,15 +267,36 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
 
     console.log(`[Trigger] Lumi response for ${contextId}. Targets: ${targetIds.join(',')}`);
 
+    // DEBUG: Full trace
     if (debugMode === 'full') {
         let systemMsg = getLumiSystemMessage();
-        if (targetIds.length > 0) systemMsg += `\n\n[FOCUS IDs]: ${targetIds.join(', ')}`;
+        if (targetIds.length > 0) systemMsg += `\n\n[REPLY TO MESSAGE_IDs]: ${targetIds.join(', ')}`;
+
         const historyDebug = `[SYSTEM]\n${systemMsg}\n\n---\n\n` + history.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
         await sendDebugAttachment(channel, `🤖 LUMI INPUT`, historyDebug);
     }
 
     try {
-        const rawResponse = await callLumiAgent(history, targetIds);
+        // Generate response
+        const { response: finalResponse, trace } = await callLumiAgent(history, targetIds);
+
+        // DEBUG: Full trace including tools
+        if (debugMode === 'full' && trace) {
+            const fullTrace = trace.map(m => {
+                if (m.role === 'tool') {
+                    return `[TOOL RESULT] (${m.name}): ${m.content}`;
+                }
+                if (m.toolCalls) {
+                    const calls = m.toolCalls.map(c => `${c.function.name}(${c.function.arguments})`).join(', ');
+                    return `[ASSISTANT TOOL CALLS]: ${calls}`;
+                }
+                return `[${m.role.toUpperCase()}]: ${m.content}`;
+            }).join('\n\n---\n\n');
+
+            await sendDebugAttachment(channel, `🛠️ LUMI TRACE (Tools & History)`, fullTrace);
+        }
+
+        const rawResponse = finalResponse;
         if (!rawResponse) return;
 
         const parsed = parseAIResponse(rawResponse);

@@ -16,6 +16,9 @@ Para CADA mensaje listado en el input, debes asignar una acción:
 - **Certeza**: Ante la duda de si el usuario va a escribir más, prefiere IGNORAR. Es mejor callar que interrumpir una frase a medias.
 - Preguntas, saludos, o temas donde la opinión de Lumi es relevante.
 - **Respuestas directas**: Si el mensaje es una respuesta (Reply) a un mensaje tuyo (ver MsgID en historial), RESPONDER SIEMPRE.
+- **Acciones / Herramientas**: Si el usuario pide explícitamente una acción listada en la sección **HERRAMIENTAS ACTIVAS DE LUMI** (abajo), RESPONDER.
+    - Ejemplos válidos genericos: "usa la herramienta X", "ejecuta accion Y".
+    - Nota: Aunque parezcan comandos de bot, si Lumi tiene la herramienta, es para ella.
 - **Secuencias**: Si el usuario envía varios mensajes seguidos que forman una idea, marca como RESPONDER solo al último (o al que completa la idea). Marca los anteriores como IGNORAR.
 
 ### IGNORAR
@@ -199,4 +202,17 @@ PENDING: [Lian] (ID:304) "Y si no fuera Sally?"
     <MSG id="304" action="RESPONDER" />
 </DECISIONS>
 <REASON>ID:302 pide justificación sobre un elemento de la respuesta anterior (contexto "foca" corregido en 303). ID:304 es otra pregunta de seguimiento directa ("Y si no fuera..."). Ambas requieren respuesta.</REASON>
+```
+
+**Input:**
+--- CONVERSATION HISTORY (Context) ---
+[USER]: [Shocker] (MsgID:400) "roll a d20"
+PENDING: [Shocker] (ID:400) "roll a d20"
+
+**Output:**
+```xml
+<DECISIONS>
+    <MSG id="400" action="RESPONDER" />
+</DECISIONS>
+<REASON>Solicitud de acción/herramienta (tirar dados). Es una función válida de Lumi.</REASON>
 ```

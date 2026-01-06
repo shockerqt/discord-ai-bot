@@ -30,8 +30,23 @@ export function getLumiSystemMessage() {
 /**
  * Get decision agent's system message
  */
+import { getToolDefinitions } from './tools/registry.js';
+
+// ... (existing imports)
+
+/**
+ * Get decision agent's system message
+ */
 export function getDecisionSystemMessage() {
-    return DECISION_INSTRUCTIONS;
+    const tools = getToolDefinitions();
+    let instructions = DECISION_INSTRUCTIONS;
+
+    if (tools.length > 0) {
+        const toolsDesc = tools.map(t => `- **${t.function.name}**: ${t.function.description}`).join('\n');
+        instructions += `\n\n## HERRAMIENTAS ACTIVAS DE LUMI\nLumi tiene acceso a las siguientes herramientas. Si el usuario pide algo relacionado con esto, DEBES marcarlo como RESPONDER:\n${toolsDesc}\n\n`;
+    }
+
+    return instructions;
 }
 
 /**
