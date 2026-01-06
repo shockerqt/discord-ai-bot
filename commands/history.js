@@ -1,17 +1,34 @@
-import { getMessages, getMessageCount } from '../utils/messageStore.js';
+import { getMessages, getMessageCount, getDecisionHistory } from '../utils/messageStore.js';
 import { InteractionResponseType } from 'discord-interactions';
 
 export const data = {
     name: 'history',
     description: 'Download the conversation history for this channel.',
     type: 1, // CHAT_INPUT
+    options: [
+        {
+            type: 3, // STRING
+            name: 'type',
+            description: 'Type of history to export',
+            required: false,
+            choices: [
+                { name: 'Standard (Lumi)', value: 'standard' },
+                { name: 'Decision Agent', value: 'decision' }
+            ]
+        }
+    ]
 };
 
 export async function execute(req, res) {
-    const { channel_id, application_id, token } = req.body;
+    const { channel_id, application_id, token, data: commandData } = req.body;
+
+    const typeOption = commandData.options?.find(o => o.name === 'type');
+    const type = typeOption ? typeOption.value : 'standard';
 
     // Get messages from memory
-    const messages = getMessages(channel_id);
+    const messages = type === 'decision'
+        ? getDecisionHistory(channel_id)
+        : getMessages(channel_id);
     const count = getMessageCount(channel_id);
 
     console.log(`--- HISTORY COMMAND (${count} messages) ---`);
@@ -50,10 +67,10 @@ export async function execute(req, res) {
         }
 
         await channel.send({
-            content: `**Conversation History** (${count} messages)`,
+            content: `**Conversation History (${type.toUpperCase()})** (${count} messages)`,
             files: [{
                 attachment: buffer,
-                name: `history-${channel_id}-${Date.now()}.txt`
+                name: `history-${type}-${channel_id}-${Date.now()}.txt`
             }]
         });
 

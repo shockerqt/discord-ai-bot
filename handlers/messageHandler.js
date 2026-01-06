@@ -49,7 +49,8 @@ export function extractUserMessages(msgs) {
         userName: msg.member?.displayName || msg.author.username,
         content: msg.content,
         timestamp: now,
-        messageId: msg.id
+        messageId: msg.id,
+        replyTo: msg.reference?.messageId || null
     }));
 }
 
@@ -71,7 +72,7 @@ async function sendDebugAttachment(channel, label, content, replyTo = null) {
 
 async function handleDebugOutput(debugMode, channel, lastMessage, contentStr) {
     if (debugMode === 'full') {
-        await sendDebugOutput(channel, 'Chat Completions API', contentStr);
+        await sendDebugOutput(channel, contentStr);
     } else if (debugMode === 'thoughts') {
         const thoughtMatch = contentStr.match(/<THOUGHT>([\s\S]*?)<\/THOUGHT>/i);
         if (thoughtMatch) {
@@ -158,13 +159,9 @@ async function callLumiAgent(historyMessages, targetIds = []) {
     let systemContent = getLumiSystemMessage();
 
     // Inject focus instructions if IDs present
+    // Inject focus instructions if IDs present
     if (targetIds && targetIds.length > 0) {
-        if (targetIds.length === 1) {
-            systemContent += `\n\nSYSTEM UPDATE: You must respond specifically to the following message (identified by MsgID in history): ${targetIds[0]}.`;
-        } else {
-            // Even if we removed combined logic, we still tell Lumi "these messages caused the trigger"
-            systemContent += `\n\nSYSTEM UPDATE: The interactions (identified by MsgID in history): ${targetIds.join(', ')} triggered this response. Address them.`;
-        }
+        systemContent += `\n\n[REPLY TO MESSAGE_IDs]: ${targetIds.join(', ')}`;
     }
 
     const params = getLumiParams();
@@ -209,8 +206,11 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
         if (parsed.messages && parsed.messages.length > 0) {
             for (const msg of parsed.messages) {
                 if (msg.send_text && msg.text_content) {
-                    addAssistantMessage(contextId, msg.text_content);
-                    await sendTextMessage(channel, msg);
+                    const sentMsg = await sendTextMessage(channel, msg);
+                    // Usar el ID real si se envió, sino fallback
+                    const realId = sentMsg ? sentMsg.id : null;
+                    addAssistantMessage(contextId, msg.text_content, realId);
+
                     // Small delay to ensure order in Discord if rapid fire?
                     // await new Promise(r => setTimeout(r, 200)); 
                     // Not strictly necessary if await sendTextMessage waits for API. Await is sufficient.

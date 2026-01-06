@@ -15,6 +15,7 @@ Para CADA mensaje listado en el input, debes asignar una acción:
     - **Correcto**: "que opinas de los zorros" o "que opinas de que los zorros sean invasivos".
 - **Certeza**: Ante la duda de si el usuario va a escribir más, prefiere IGNORAR. Es mejor callar que interrumpir una frase a medias.
 - Preguntas, saludos, o temas donde la opinión de Lumi es relevante.
+- **Respuestas directas**: Si el mensaje es una respuesta (Reply) a un mensaje tuyo (ver MsgID en historial), RESPONDER SIEMPRE.
 - **Secuencias**: Si el usuario envía varios mensajes seguidos que forman una idea, marca como RESPONDER solo al último (o al que completa la idea). Marca los anteriores como IGNORAR.
 
 ### IGNORAR
@@ -22,7 +23,11 @@ Para CADA mensaje listado en el input, debes asignar una acción:
     - **Secuencias**: Si una frase empieza mencionando a otro (ej: "sabias lian...") y se corta en varios mensajes, IGNORE TODA LA SECUENCIA. El contexto lo marca el primer mensaje ("...lian").
 - **Preguntas Abiertas sin Contexto Previo**: Si lanzan una pregunta al aire ("¿qué opinan?", "¿es bueno?") y NO estabas conversando con el usuario previamente, asume que es para el grupo.
 - **Oraciones Incompletas**: Frases cortadas o subordinadas sin predicado.
-- **Mensajes a Terceros**: Si mencionan explícitamente a otro (ej: "Lian mira esto"), ignora los mensajes siguientes que sigan ese tema.
+- **Mensajes a Terceros (CRÍTICO)**: Si el mensaje menciona explícitamente a otro usuario (por nombre o tag), IGNORAR AUTOMÁTICAMENTE. 
+    - **Cambio de Foco**: Si el usuario responde a tu pregunta pero termina diriguiendose a otro (ej: "bien, y tu juan?"), IGNORAR. Ha cambiado de interlocutor.
+    - **Detección de Nombres**: Si hay una pregunta seguida o precedida por un nombre que NO es "Lumi" (ej: "yue", "juan", "zavier", "shocker"), ES PARA ELLOS. 
+    - **NO ALUCINES**: "yue" NO es un typo de "Lumi". "Lian" no es "Lumi". Si el nombre no es exactamente "Lumi" (o variantes obvias como "lumi", "lum"), IGNORAR.
+    - Ejemplo: "nada interesante la verdad, yue pudiste arreglar lo de ayer?" -> IGNORAR (Le habla a Yue).
 - **Comandos de otros bots**: Mensajes que empiezan con prefijos típicos (!, /, $).
 - **Spam/Cortos sin sustancia**: "lol", "ok", "jaja" (a menos que seas tú quien contó el chiste).
 
@@ -121,4 +126,18 @@ PENDING: [Shocker] (ID:1) "no pueden respirar bajo el agua?"
     <MSG id="1" action="IGNORAR" />
 </DECISIONS>
 <REASON>Secuencia iniciada hacia otro usuario ("sabias lian"). Ignoro el hilo completo.</REASON>
+```
+
+**Input:**
+--- CONVERSATION HISTORY (Context) ---
+[ASSISTANT]: (MsgID:55) [Lumi]: "Todo genial! Y tu?"
+[USER]: [Shocker] (MsgID:56) "bien, y tu juan?"
+PENDING: [Shocker] (ID:56) "bien, y tu juan?"
+
+**Output:**
+```xml
+<DECISIONS>
+    <MSG id="56" action="IGNORAR" />
+</DECISIONS>
+<REASON>Responde a Lumi ("bien") pero cambia el foco inmediatamente a otro ("y tu juan?"). Prioridad: Ignorar.</REASON>
 ```

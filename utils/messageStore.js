@@ -57,7 +57,8 @@ export function addUserMessages(channelId, userMessages) {
             content: msg.content,
             author: msg.userName,
             timestamp: msg.timestamp,
-            status: MSG_STATUS.PENDING
+            status: MSG_STATUS.PENDING,
+            replyTo: msg.replyTo
         });
     }
 
@@ -105,11 +106,11 @@ export function resolveAssistantMessage(channelId, placeholderId, content) {
 /**
  * Agrega mensaje de asistente (Legacy / Direct)
  */
-export function addAssistantMessage(channelId, content) {
+export function addAssistantMessage(channelId, content, messageId = null) {
     if (!content || content.trim() === '') return;
     const messages = getRawMessages(channelId);
     messages.push({
-        id: `asst-${Date.now()}`,
+        id: messageId || `asst-${Date.now()}`,
         role: 'assistant',
         content: content,
         author: 'Lumi',
@@ -172,7 +173,10 @@ export function getDecisionHistory(channelId) {
         // Esto es crucial para que pueda referenciar mensajes anteriores si es necesario
         // O entender el flujo temporal.
         if (msg.role === 'user') {
-            const line = `[${msg.timestamp}] (MsgID:${msg.id}) ${msg.author}: ${msg.content}`;
+            let line = `[${msg.timestamp}] (MsgID:${msg.id}) ${msg.author}: ${msg.content}`;
+            if (msg.replyTo) {
+                line += ` [Replying to: ${msg.replyTo}]`;
+            }
 
             if (currentMsg && currentMsg.role === 'user') {
                 currentMsg.content += '\n' + line;
@@ -181,14 +185,17 @@ export function getDecisionHistory(channelId) {
                 history.push(currentMsg);
             }
         } else {
-            // Assistant
+            // Assistant (Lumi)
+            // Mostrar ID también para que el agente sepa si le están respondiendo
+            const line = `(MsgID:${msg.id}) [Lumi]: ${msg.content}`;
+
             if (currentMsg && currentMsg.role === 'user') currentMsg = null;
 
             const lastMsg = history.length > 0 ? history[history.length - 1] : null;
             if (lastMsg && lastMsg.role === 'assistant') {
-                lastMsg.content += '\n\n' + msg.content;
+                lastMsg.content += '\n\n' + line;
             } else {
-                history.push({ role: 'assistant', content: msg.content });
+                history.push({ role: 'assistant', content: line });
             }
         }
     }

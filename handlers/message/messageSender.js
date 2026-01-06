@@ -17,7 +17,7 @@ export async function sendTextMessage(channel, output) {
     }
 
     try {
-        await channel.send(msgOptions);
+        return await channel.send(msgOptions);
     } catch (sendErr) {
         console.error("Failed to send message:", sendErr);
     }
@@ -59,10 +59,8 @@ export async function sendReactions(message, reactionString) {
  * @param {string} contentStr - Contenido raw XML
  * @returns {Promise<void>}
  */
-export async function sendDebugOutput(channel, debugRngInfo, contentStr) {
+export async function sendDebugOutput(channel, contentStr) {
     const debugContent = `
-RNG INFO: ${debugRngInfo}
-
 --- COMPLETE RAW XML ---
 ${contentStr}
 `;
