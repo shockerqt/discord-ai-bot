@@ -41,7 +41,7 @@ function wrapText(text, width = 80) {
     }).join('\n');
 }
 
-function extractUserMessages(msgs) {
+export function extractUserMessages(msgs) {
     const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' });
     return msgs.map(msg => ({
         userId: msg.author.id,
@@ -51,6 +51,12 @@ function extractUserMessages(msgs) {
         messageId: msg.id
     }));
 }
+
+// ... (SendDebugAttachment and HandleDebugOutput omitted for brevity if unchanged, but I need to be careful with replace_file_content context matching)
+// Actually I will target separate chunks.
+
+// Chunk 1: Export extractUserMessages
+
 
 async function sendDebugAttachment(channel, label, content, replyTo = null) {
     const buffer = Buffer.from('\uFEFF' + content, 'utf-8');
@@ -225,9 +231,9 @@ export async function handlePassiveMessage(messages) {
     const contextId = lastMessage.channel.id;
     const debugMode = getDebugMode(contextId);
 
-    // 1. Save messages (Status: PENDING)
-    const userMsgs = extractUserMessages(msgs);
-    addUserMessages(contextId, userMsgs);
+    // 1. Save messages (Status: PENDING) -> Now handled in discordClient.js
+    // const userMsgs = extractUserMessages(msgs);
+    // addUserMessages(contextId, userMsgs);
 
     // 2. Get all Unprocessed
     const unprocessed = getUnprocessedMessages(contextId);
