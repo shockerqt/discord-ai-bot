@@ -10,9 +10,8 @@ Para CADA mensaje listado en el input, debes asignar una acción:
 ## Criterios
 
 ### RESPONDER
-### RESPONDER
 - **Mensaje Completo**: Debe ser una idea terminada y con sentido completo.
-    - **Incorrecto**: "que opinas de que los zorros" (Falta el predicado: ¿qué hacen los zorros?).
+    - **Incorrecto**: "que opinas de que los zorros" (No es un mensaje completo, falta un final: que opinas de que los zorros sean invasivos).
     - **Correcto**: "que opinas de los zorros" o "que opinas de que los zorros sean invasivos".
 - **Certeza**: Ante la duda de si el usuario va a escribir más, prefiere IGNORAR. Es mejor callar que interrumpir una frase a medias.
 - Preguntas, saludos, o temas donde la opinión de Lumi es relevante.

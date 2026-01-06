@@ -157,6 +157,45 @@ export function getFormattedHistory(channelId) {
 }
 
 /**
+ * Obtiene historial específico para el Decision Agent
+ * Formato simplificado o ajustado para toma de decisiones
+ */
+export function getDecisionHistory(channelId) {
+    const raw = getRawMessages(channelId);
+    if (!raw.length) return [];
+
+    const history = [];
+    let currentMsg = null;
+
+    for (const msg of raw) {
+        // Para Decision Agent, mantenemos el formato rico con Timestamp ID y Autor
+        // Esto es crucial para que pueda referenciar mensajes anteriores si es necesario
+        // O entender el flujo temporal.
+        if (msg.role === 'user') {
+            const line = `[${msg.timestamp}] (MsgID:${msg.id}) ${msg.author}: ${msg.content}`;
+
+            if (currentMsg && currentMsg.role === 'user') {
+                currentMsg.content += '\n' + line;
+            } else {
+                currentMsg = { role: 'user', content: line };
+                history.push(currentMsg);
+            }
+        } else {
+            // Assistant
+            if (currentMsg && currentMsg.role === 'user') currentMsg = null;
+
+            const lastMsg = history.length > 0 ? history[history.length - 1] : null;
+            if (lastMsg && lastMsg.role === 'assistant') {
+                lastMsg.content += '\n\n' + msg.content;
+            } else {
+                history.push({ role: 'assistant', content: msg.content });
+            }
+        }
+    }
+    return history;
+}
+
+/**
  * Obtiene mensajes no procesados (PENDING o WAITING) para el Decision Agent
  */
 export function getUnprocessedMessages(channelId) {

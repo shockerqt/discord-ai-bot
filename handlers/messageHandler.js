@@ -6,6 +6,7 @@ import { Mistral } from '@mistralai/mistralai';
 import { getLumiSystemMessage, getDecisionSystemMessage, getLumiParams } from '../utils/agentManager.js';
 import {
     getFormattedHistory,
+    getDecisionHistory,
     addUserMessages,
     addAssistantMessage,
     getUnprocessedMessages,
@@ -260,14 +261,14 @@ export async function handlePassiveMessage(messages) {
     if (unprocessed.length === 0) return;
 
     // 3. Decision Agent
-    const history = getFormattedHistory(contextId);
+    const history = getDecisionHistory(contextId);
     console.log("--- DECISION AGENT (Binary) ---");
     const decisionResult = await callDecisionAgent(history, unprocessed);
 
     console.log(`Decision Reason: ${decisionResult.reason}`);
     decisionResult.decisions.forEach(d => console.log(` -> MSG ${d.id}: ${d.action}`));
 
-    if (debugMode === 'full') {
+    if (debugMode === 'full' || debugMode === 'decisions') {
         await sendDebugAttachment(lastMessage.channel, '🧠 DECISION',
             `Input:\n${decisionResult.contextSent}\n\nOutput:\n${decisionResult.rawResponse}`,
             lastMessage.id);
