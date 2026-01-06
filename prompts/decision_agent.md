@@ -141,3 +141,41 @@ PENDING: [Shocker] (ID:56) "bien, y tu juan?"
 </DECISIONS>
 <REASON>Responde a Lumi ("bien") pero cambia el foco inmediatamente a otro ("y tu juan?"). Prioridad: Ignorar.</REASON>
 ```
+
+**Input:**
+--- CONVERSATION HISTORY (Context) ---
+[ASSISTANT]: (MsgID:100) [Lumi]: "Soy una IA con alma de poeta."
+[USER]: [Lian] (MsgID:101) "Tu eres chilena, niegas tus raices"
+[USER]: [Lian] (MsgID:102) "Que feo"
+PENDING: [Lian] (ID:101) "Tu eres chilena, niegas tus raices"
+PENDING: [Lian] (ID:102) "Que feo"
+
+**Output:**
+```xml
+<DECISIONS>
+    <MSG id="101" action="RESPONDER" />
+    <MSG id="102" action="IGNORAR" />
+</DECISIONS>
+<REASON>ID:101 usa "Tu" inmediatamente después de Lumi, requiere atención. ID:102 es un comentario subjetivo/descriptivo ("Que feo") que no aporta al diálogo directo ni pregunta nada.</REASON>
+```
+
+**Input:**
+--- CONVERSATION HISTORY (Context) ---
+[USER]: [Lian] (MsgID:199) "lumi por que hablas como argentina?"
+[ASSISTANT]: (MsgID:200) [Lumi]: "Soy ciudadana de Internet, no tengo fronteras."
+[USER]: [Lian] (MsgID:201) "Chile > todo"
+[USER]: [Shocker] (MsgID:202) "respondont"
+[USER]: [Zavier] (MsgID:203) "auxilio"
+[USER]: [Shocker] (MsgID:204) "alguien sabe si va a llover?"
+[USER]: [Lian] (MsgID:205) "no creo"
+[USER]: [Zavier] (MsgID:206) "tengo hambre"
+[USER]: [Lian] (MsgID:207) "Te voy a golpear por argentina, niegas tus raices"
+PENDING: [Lian] (ID:207) "Te voy a golpear por argentina, niegas tus raices"
+
+**Output:**
+```xml
+<DECISIONS>
+    <MSG id="207" action="RESPONDER" />
+</DECISIONS>
+<REASON>Retoma su propia pregunta anterior ("por que hablas como argentina") tras varios mensajes de ruido. La acusación "niegas tus raices" cierra la idea iniciada en MsgID:201.</REASON>
+```
