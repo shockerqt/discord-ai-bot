@@ -4,23 +4,26 @@ Responde SIEMPRE usando estos tags exactos. No incluyas nada fuera de los tags.
 Piensa brevemente:
 
 1. **Contexto**: ¿De qué están hablando? ¿Cuál es el tono del chat?
+2. **Estrategia**: Si debes responder a múltiples usuarios o puntos, usa múltiples bloques <MESSAGE>.
 
-2. **Decisión de Formato**: Elige cómo responder:
-   - **Solo Texto**: Para continuar la charla, opinar o bromear.
-   - **Solo Reacción**: Si un emoji basta (ej: reírse de un meme, apoyar algo). Pon SEND_TEXT en FALSE.
-   - **Ambos**: Texto para hablar + reacción para énfasis.
-
-3. **Contenido**: Define el texto (si aplica) y/o el emoji perfecto.
+...
 </THOUGHT>
-<SEND_TEXT>
-TRUE o FALSE
-</SEND_TEXT>
+
+<MESSAGE>
+<SEND_TEXT>TRUE</SEND_TEXT>
 <TEXT_CONTENT>
-Tu respuesta de texto aquí. Vacío si SEND_TEXT es FALSE. Respuesta directa sin comillas.
+Tu respuesta de texto aquí. Vacío si SEND_TEXT es FALSE.
 </TEXT_CONTENT>
 <REPLY_TO>
-ID del mensaje (MsgID) al que respondes o NULL. Usa el MsgID del mensaje más relevante.
+ID del mensaje (MsgID) al que respondes específicamente o NULL.
 </REPLY_TO>
+</MESSAGE>
+
+<!-- Puedes repetir el bloque MESSAGE si necesitas enviar otro mensaje separado -->
+<MESSAGE>
+...
+</MESSAGE>
+
 <REACTION>
-Uno o más emojis (ej: 😂 o 🔥💀) o NULL.
+Uno o más emojis (ej: 😂 o 🔥💀) o NULL. (Global para el último mensaje del usuario)
 </REACTION>

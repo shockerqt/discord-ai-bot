@@ -205,12 +205,20 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
         if (!rawResponse) return;
 
         const parsed = parseAIResponse(rawResponse);
-        if (parsed.send_text && parsed.text_content) {
-            addAssistantMessage(contextId, parsed.text_content);
+        if (parsed.messages && parsed.messages.length > 0) {
+            for (const msg of parsed.messages) {
+                if (msg.send_text && msg.text_content) {
+                    addAssistantMessage(contextId, msg.text_content);
+                    await sendTextMessage(channel, msg);
+                    // Small delay to ensure order in Discord if rapid fire?
+                    // await new Promise(r => setTimeout(r, 200)); 
+                    // Not strictly necessary if await sendTextMessage waits for API. Await is sufficient.
+                }
+            }
         }
 
         await handleDebugOutput(debugMode, channel, lastMessage, rawResponse);
-        await sendTextMessage(channel, parsed);
+        // await sendTextMessage(channel, parsed); // Removed single call
         await sendReactions(lastMessage, parsed.reaction);
 
     } catch (error) {
