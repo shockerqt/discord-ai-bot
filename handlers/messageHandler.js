@@ -1,15 +1,17 @@
 /**
  * Message Handler - Maneja mensajes pasivos del bot
  * Pipeline: Decision Agent -> Lumi Agent -> Discord Response
+ * Usando Chat Completions API
  */
 import { Mistral } from '@mistralai/mistralai';
-import { getOmniAgentId, getDecisionAgentId } from '../utils/agentManager.js';
+import { getLumiSystemMessage, getDecisionSystemMessage, getLumiParams } from '../utils/agentManager.js';
 import { getMessages, addUserMessage, addAssistantMessage } from '../utils/messageStore.js';
-import { debugChannels } from '../commands/debug.js';
+import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
+const MODEL = process.env.MISTRAL_MODEL || 'mistral-medium-latest';
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -65,16 +67,14 @@ async function sendDebugAttachment(channel, label, content, replyTo = null) {
 }
 
 // ============================================================================
-// DECISION AGENT
+// DECISION AGENT - Uses chat.complete()
 // ============================================================================
 
 /**
  * Call the decision agent to determine if Lumi should respond
- * @param {Array} history - Previous messages in the channel
- * @param {string} currentMessage - Current message content
  */
 async function callDecisionAgent(history, currentMessage) {
-    // Build context with history
+    // Build context message for decision
     let contextContent = '';
     if (history.length > 0) {
         contextContent += '--- CONVERSATION HISTORY ---\n';
@@ -85,10 +85,14 @@ async function callDecisionAgent(history, currentMessage) {
     contextContent += currentMessage;
 
     try {
-        const agentId = await getDecisionAgentId();
-        const response = await client.beta.agents.complete({
-            agentId,
-            messages: [{ role: 'user', content: contextContent }]
+        const response = await client.chat.complete({
+            model: MODEL,
+            messages: [
+                { role: 'system', content: getDecisionSystemMessage() },
+                ...history,
+                { role: 'user', content: currentMessage }
+            ],
+            temperature: 0.1
         });
 
         const content = response.choices?.[0]?.message?.content || '';
@@ -108,19 +112,24 @@ async function callDecisionAgent(history, currentMessage) {
 }
 
 // ============================================================================
-// LUMI AGENT
+// LUMI AGENT - Uses chat.complete()
 // ============================================================================
 
 /**
  * Call the main Lumi agent with conversation history
  */
-async function callLumiAgent(contextId) {
-    const agentId = await getOmniAgentId();
-    const messages = getMessages(contextId);
+async function callLumiAgent(historyMessages) {
+    const params = getLumiParams();
 
-    const response = await client.beta.agents.complete({
-        agentId,
-        messages
+    const response = await client.chat.complete({
+        model: MODEL,
+        messages: [
+            { role: 'system', content: getLumiSystemMessage() },
+            ...historyMessages
+        ],
+        temperature: params.temperature,
+        presence_penalty: params.presence_penalty,
+        frequency_penalty: params.frequency_penalty
     });
 
     return response.choices?.[0]?.message?.content || '';
@@ -135,7 +144,7 @@ async function callLumiAgent(contextId) {
  */
 async function handleDebugOutput(debugMode, channel, lastMessage, contentStr) {
     if (debugMode === 'full') {
-        await sendDebugOutput(channel, 'Completions API', contentStr);
+        await sendDebugOutput(channel, 'Chat Completions API', contentStr);
     } else if (debugMode === 'thoughts') {
         const thoughtMatch = contentStr.match(/<THOUGHT>([\s\S]*?)<\/THOUGHT>/i);
         if (thoughtMatch) {
@@ -160,7 +169,7 @@ export async function handlePassiveMessage(messages) {
 
     const lastMessage = msgs[msgs.length - 1];
     const contextId = lastMessage.channel.id;
-    const debugMode = debugChannels.get(contextId);
+    const debugMode = getDebugMode(contextId);
 
     // Build message context
     const messageContent = buildMessageContext(msgs);
@@ -193,18 +202,18 @@ REASON: ${decision.reason}`;
 
     // ========== STEP 2: Add to History ==========
     addUserMessage(contextId, messageContent);
+    const updatedHistory = getMessages(contextId);
 
     if (debugMode === 'full') {
-        const historyForDebug = getMessages(contextId);
-        const historyDebug = historyForDebug.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
-        await sendDebugAttachment(lastMessage.channel, `DEBUG INPUT (${historyForDebug.length} msgs)`, historyDebug);
+        const historyDebug = updatedHistory.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
+        await sendDebugAttachment(lastMessage.channel, `DEBUG INPUT (${updatedHistory.length} msgs)`, historyDebug);
     }
 
     // ========== STEP 3: Lumi Agent ==========
     console.log("--- LUMI AGENT ---");
 
     try {
-        const rawResponse = await callLumiAgent(contextId);
+        const rawResponse = await callLumiAgent(updatedHistory);
 
         if (!rawResponse) {
             console.log("[Lumi] Empty response received.");
@@ -237,4 +246,3 @@ REASON: ${decision.reason}`;
         }
     }
 }
-

@@ -1,4 +1,8 @@
 import { InteractionResponseType } from 'discord-interactions';
+import {
+    getConfig, getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty,
+    setPersonality, setTemperature, setPresencePenalty, setFrequencyPenalty
+} from '../utils/configStore.js';
 
 export const data = {
     name: 'configure',
@@ -11,32 +15,32 @@ export const data = {
         },
         {
             name: 'personality',
-            description: 'Add personality instructions (appends to existing)',
+            description: 'Set personality instructions (text appends, file overwrites)',
             type: 1, // SUB_COMMAND
             options: [
                 {
                     type: 3, // STRING
                     name: 'text',
-                    description: 'The personality instructions to add',
+                    description: 'Personality instructions to APPEND',
                     required: false,
                 },
                 {
                     type: 11, // ATTACHMENT
                     name: 'file',
-                    description: 'Text file with personality instructions (bypasses 2000 char limit)',
+                    description: 'Text file to OVERWRITE personality (bypasses 2000 char limit)',
                     required: false,
                 }
             ]
         },
         {
             name: 'creativity',
-            description: 'Set creativity/temperature (0.0 to 1.0)',
+            description: 'Set temperature (0.0 to 1.0)',
             type: 1, // SUB_COMMAND
             options: [
                 {
                     type: 10, // NUMBER
                     name: 'value',
-                    description: 'Temperature value (0.0 to 1.0)',
+                    description: 'Temperature value',
                     required: true,
                     min_value: 0.0,
                     max_value: 1.0,
@@ -44,15 +48,32 @@ export const data = {
             ]
         },
         {
-            name: 'image_generation',
-            description: 'Enable or disable image generation',
+            name: 'presence_penalty',
+            description: 'Set presence penalty (-2.0 to 2.0)',
             type: 1, // SUB_COMMAND
             options: [
                 {
-                    type: 5, // BOOLEAN
-                    name: 'enabled',
-                    description: 'Enable or disable',
+                    type: 10, // NUMBER
+                    name: 'value',
+                    description: 'Presence penalty value',
                     required: true,
+                    min_value: -2.0,
+                    max_value: 2.0,
+                }
+            ]
+        },
+        {
+            name: 'frequency_penalty',
+            description: 'Set frequency penalty (-2.0 to 2.0)',
+            type: 1, // SUB_COMMAND
+            options: [
+                {
+                    type: 10, // NUMBER
+                    name: 'value',
+                    description: 'Frequency penalty value',
+                    required: true,
+                    min_value: -2.0,
+                    max_value: 2.0,
                 }
             ]
         },
@@ -70,7 +91,7 @@ export const data = {
 export async function execute(req, res) {
     const { data, channel_id, application_id, token } = req.body;
 
-    // 1. Defer immediately
+    // Defer immediately
     res.send({
         type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
     });
@@ -79,174 +100,117 @@ export async function execute(req, res) {
     const endpoint = `webhooks/${application_id}/${token}/messages/@original`;
 
     try {
-        const { updateAgentPersona, getAgentPersona, getBaseInstructions } = await import('../utils/agentManager.js');
         const { client: discordClient } = await import('../discordClient.js');
 
         const subCommand = data.options[0].name;
         const subOptions = data.options[0].options || [];
 
-        // SHOW - Display current settings
+        // SHOW
         if (subCommand === 'show') {
-            const currentParams = await getAgentPersona();
-            const fullInstructions = currentParams.instructions || '';
-            const baseInstructions = getBaseInstructions();
-
-            // Extract user instructions (remove base + separator)
-            let userInstructions = fullInstructions;
-            const separator = '\n\n---\n\n';
-            if (fullInstructions.startsWith(baseInstructions)) {
-                const afterBase = fullInstructions.slice(baseInstructions.length);
-                userInstructions = afterBase.startsWith(separator)
-                    ? afterBase.slice(separator.length)
-                    : afterBase;
-            }
-
-            const currentTemp = currentParams.temperature ?? (currentParams.completionArgs?.temperature) ?? "Default";
-            const currentTools = currentParams.tools || [];
-            const hasImageGen = currentTools.some(t => t.type === 'image_generation');
-
-            const personalityBuffer = Buffer.from('\uFEFF' + (userInstructions || '(No custom personality set)'), 'utf-8');
+            const cfg = getConfig();
+            const personalityBuffer = Buffer.from('\uFEFF' + (cfg.personality || '(No custom personality set)'), 'utf-8');
 
             const channel = await discordClient.channels.fetch(channel_id);
             if (!channel) throw new Error("Channel not found.");
 
             await channel.send({
-                content: `ℹ️ **Current Configuration**\n\n**Creativity:** ${currentTemp}\n**Image Generation:** ${hasImageGen ? '✅ Enabled' : '❌ Disabled'}\n\n📄 **Personality:** Ver archivo adjunto`,
+                content: `ℹ️ **Current Configuration**\n\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
                 files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
             });
 
-            await DiscordRequest(endpoint, {
-                method: 'PATCH',
-                body: { content: "Configuration shown! (See attachment below)" }
-            });
+            await DiscordRequest(endpoint, { method: 'PATCH', body: { content: "Configuration shown!" } });
             return;
         }
 
-        // CLEAR_PERSONALITY - Clear all instructions
+        // CLEAR_PERSONALITY
         if (subCommand === 'clear_personality') {
-            await updateAgentPersona('', undefined, undefined);
-
+            setPersonality('');
             await DiscordRequest(endpoint, {
                 method: 'PATCH',
-                body: { content: '🗑️ **Personality cleared!** Base instructions (output format) are preserved.' }
+                body: { content: '🗑️ **Personality cleared!** Base instructions are preserved.' }
             });
             return;
         }
 
-        // PERSONALITY - Append new instructions
+        // PERSONALITY
         if (subCommand === 'personality') {
             const textOption = subOptions.find(o => o.name === 'text');
             const fileOption = subOptions.find(o => o.name === 'file');
 
             let newText = '';
 
-            // Handle attachment if provided
             if (fileOption) {
                 const attachmentId = fileOption.value;
                 const attachment = req.body.data.resolved?.attachments?.[attachmentId];
-                if (attachment && attachment.url) {
+                if (attachment?.url) {
                     try {
                         const response = await fetch(attachment.url);
-                        if (!response.ok) throw new Error(`Failed to fetch attachment: ${response.status}`);
+                        if (!response.ok) throw new Error(`Failed: ${response.status}`);
                         newText = await response.text();
                     } catch (fetchErr) {
-                        await DiscordRequest(endpoint, {
-                            method: 'PATCH',
-                            body: { content: `❌ Failed to read attachment: ${fetchErr.message}` }
-                        });
+                        await DiscordRequest(endpoint, { method: 'PATCH', body: { content: `❌ Failed: ${fetchErr.message}` } });
                         return;
                     }
                 }
+                // File OVERWRITES
+                setPersonality(newText);
             } else if (textOption) {
-                newText = textOption.value;
+                // Text APPENDS
+                const current = getPersonality();
+                newText = current ? `${current}\n\n${textOption.value}` : textOption.value;
+                setPersonality(newText);
             } else {
-                await DiscordRequest(endpoint, {
-                    method: 'PATCH',
-                    body: { content: '❌ Please provide either text or a file attachment.' }
-                });
+                await DiscordRequest(endpoint, { method: 'PATCH', body: { content: '❌ Provide text or file.' } });
                 return;
             }
 
-            let userInstructions = '';
-
-            // File overwrites, text appends
-            if (fileOption) {
-                userInstructions = newText; // Overwrite
-            } else {
-                // Extract current user instructions (without BASE)
-                const currentParams = await getAgentPersona();
-                const fullInstructions = currentParams.instructions || '';
-                const baseInstructions = getBaseInstructions();
-                const separator = '\n\n---\n\n';
-
-                let currentUserInstructions = '';
-                if (fullInstructions.startsWith(baseInstructions)) {
-                    const afterBase = fullInstructions.slice(baseInstructions.length);
-                    currentUserInstructions = afterBase.startsWith(separator)
-                        ? afterBase.slice(separator.length)
-                        : afterBase;
-                } else {
-                    currentUserInstructions = fullInstructions;
-                }
-
-                userInstructions = currentUserInstructions
-                    ? `${currentUserInstructions}\n\n${newText}`
-                    : newText;
-            }
-
-            const updatedAgent = await updateAgentPersona(userInstructions, undefined, undefined);
-            await sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest);
+            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
             return;
         }
 
-        // CREATIVITY - Set temperature
+        // CREATIVITY (temperature)
         if (subCommand === 'creativity') {
             const valueOption = subOptions.find(o => o.name === 'value');
-            const updatedAgent = await updateAgentPersona(undefined, valueOption.value, undefined);
-            await sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest);
+            setTemperature(valueOption.value);
+            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
             return;
         }
 
-        // IMAGE_GENERATION - Toggle
-        if (subCommand === 'image_generation') {
-            const enabledOption = subOptions.find(o => o.name === 'enabled');
-            const updatedAgent = await updateAgentPersona(undefined, undefined, enabledOption.value);
-            await sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest);
+        // PRESENCE_PENALTY
+        if (subCommand === 'presence_penalty') {
+            const valueOption = subOptions.find(o => o.name === 'value');
+            setPresencePenalty(valueOption.value);
+            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            return;
+        }
+
+        // FREQUENCY_PENALTY
+        if (subCommand === 'frequency_penalty') {
+            const valueOption = subOptions.find(o => o.name === 'value');
+            setFrequencyPenalty(valueOption.value);
+            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
             return;
         }
 
     } catch (err) {
-        console.error("Config update error:", err);
+        console.error("Config error:", err);
         try {
-            await DiscordRequest(endpoint, {
-                method: 'PATCH',
-                body: { content: `❌ Failed to update configuration: ${err.message}` },
-            });
-        } catch (e) {
-            console.error("Failed to send error message:", e);
-        }
+            await DiscordRequest(endpoint, { method: 'PATCH', body: { content: `❌ Error: ${err.message}` } });
+        } catch (e) { console.error("Failed to send error:", e); }
     }
 }
 
-// Helper function to send config update with attachment
-async function sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest) {
-    const finalInstructions = updatedAgent.instructions || '';
-    const finalTemp = updatedAgent.temperature ?? (updatedAgent.completionArgs?.temperature) ?? "Default";
-    const finalTools = updatedAgent.tools || [];
-    const finalHasImageGen = finalTools.some(t => t.type === 'image_generation');
-
-    const personalityBuffer = Buffer.from('\uFEFF' + finalInstructions, 'utf-8');
+async function sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest) {
+    const cfg = getConfig();
+    const personalityBuffer = Buffer.from('\uFEFF' + (cfg.personality || '(empty)'), 'utf-8');
 
     const channel = await discordClient.channels.fetch(channel_id);
     if (!channel) throw new Error("Channel not found.");
 
     await channel.send({
-        content: `✅ **Configuration Updated!**\n\n**Creativity:** ${finalTemp}\n**Image Generation:** ${finalHasImageGen ? '✅ Enabled' : '❌ Disabled'}\n\n📄 **Personality:** Ver archivo adjunto`,
+        content: `✅ **Configuration Updated!**\n\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
         files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
     });
 
-    await DiscordRequest(endpoint, {
-        method: 'PATCH',
-        body: { content: "Configuration updated! (See attachment below)" }
-    });
+    await DiscordRequest(endpoint, { method: 'PATCH', body: { content: "Configuration updated!" } });
 }

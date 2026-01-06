@@ -1,170 +1,53 @@
-import { Mistral } from '@mistralai/mistralai';
+/**
+ * Agent Manager - Gestiona instrucciones y configuración de los agentes
+ * Usando Chat Completions API (no beta agents)
+ */
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty } from './configStore.js';
 
-// ES Module directory resolution
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
-let cachedAgentId = null;
-let cachedDecisionAgentId = null;
-
-const AGENT_NAME = "Lumi";
-const AGENT_DESCRIPTION = "shitposting 24/7. si me pingueas me das cringe. no soy soporte técnico.";
-
-const DECISION_AGENT_NAME = "Lumi-Decision";
-const DECISION_AGENT_DESCRIPTION = "Cold decision-making agent that determines if Lumi should respond.";
-
-// Base instructions that are ALWAYS present (output format)
+// Base instructions (output format) - always loaded
 const BASE_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/output_format.md'), 'utf-8');
+
+// Decision agent instructions
 const DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_agent.md'), 'utf-8');
 
-export async function getOmniAgentId() {
-    if (cachedAgentId) return cachedAgentId;
-
-    if (process.env.AGENT_ID) {
-        cachedAgentId = process.env.AGENT_ID;
-        console.log(`Using configured AGENT_ID: ${cachedAgentId}`);
-        return cachedAgentId;
-    }
-
-    try {
-        // 1. List existing agents to see if we already created one
-        const agentsList = await client.beta.agents.list();
-        const agents = Array.isArray(agentsList) ? agentsList : (agentsList.data || []);
-
-        // Look for our specific agent
-        const existingAgent = agents.find(a => a.name === AGENT_NAME);
-
-        if (existingAgent) {
-            console.log(`Found existing agent: ${existingAgent.id}`);
-            cachedAgentId = existingAgent.id;
-            return existingAgent.id;
-        }
-
-        // 2. Create new agent if not found
-        console.log(`Creating new agent: ${AGENT_NAME}...`);
-        const newAgent = await client.beta.agents.create({
-            model: "mistral-large-latest",
-            name: AGENT_NAME,
-            description: AGENT_DESCRIPTION,
-            instructions: BASE_INSTRUCTIONS, // Load base instructions on creation
-            // tools: [{ type: "image_generation" }], // Disabled to allow rate limit recovery
-            temperature: 0.7, // Default temperature if supported at top level, otherwise ignored
-        });
-
-        console.log(`Created new agent: ${newAgent.id}`);
-        cachedAgentId = newAgent.id;
-        return newAgent.id;
-
-    } catch (error) {
-        console.error("Error getting/creating agent:", error);
-        throw error;
-    }
-}
-
 /**
- * Get or create the decision agent ID
- * Uses DECISION_AGENT_ID env var if set, otherwise finds/creates agent
+ * Get Lumi's full system message (base instructions + personality)
  */
-export async function getDecisionAgentId() {
-    if (cachedDecisionAgentId) return cachedDecisionAgentId;
-
-    if (process.env.DECISION_AGENT_ID) {
-        cachedDecisionAgentId = process.env.DECISION_AGENT_ID;
-        console.log(`Using configured DECISION_AGENT_ID: ${cachedDecisionAgentId}`);
-        return cachedDecisionAgentId;
+export function getLumiSystemMessage() {
+    const personality = getPersonality();
+    if (personality) {
+        return `${BASE_INSTRUCTIONS}\n\n---\n\n${personality}`;
     }
-
-    try {
-        const agentsList = await client.beta.agents.list();
-        const agents = Array.isArray(agentsList) ? agentsList : (agentsList.data || []);
-
-        const existingAgent = agents.find(a => a.name === DECISION_AGENT_NAME);
-
-        if (existingAgent) {
-            console.log(`Found existing decision agent: ${existingAgent.id}`);
-            cachedDecisionAgentId = existingAgent.id;
-            return existingAgent.id;
-        }
-
-        console.log(`Creating new decision agent: ${DECISION_AGENT_NAME}...`);
-        const newAgent = await client.beta.agents.create({
-            model: "mistral-large-latest",
-            name: DECISION_AGENT_NAME,
-            description: DECISION_AGENT_DESCRIPTION,
-            instructions: DECISION_INSTRUCTIONS,
-            temperature: 0.1, // Low temperature for consistent decisions
-        });
-
-        console.log(`Created new decision agent: ${newAgent.id}`);
-        cachedDecisionAgentId = newAgent.id;
-        return newAgent.id;
-
-    } catch (error) {
-        console.error("Error getting/creating decision agent:", error);
-        throw error;
-    }
-}
-
-/**
- * Get base instructions (output format)
- */
-export function getBaseInstructions() {
     return BASE_INSTRUCTIONS;
 }
 
-export async function updateAgentPersona(userInstructions, temperature, enableImageGen) {
-    try {
-        const agentId = await getOmniAgentId();
-        console.log(`Updating agent ${agentId} with new persona...`);
-
-        // Prepare update object compliant with AgentsApiV1AgentsUpdateRequest
-        const updatePayload = {
-            agentId: agentId,
-            agentUpdateRequest: {
-            }
-        };
-
-        if (userInstructions !== undefined) {
-            // Always prepend BASE_INSTRUCTIONS to user instructions
-            const fullInstructions = userInstructions
-                ? `${BASE_INSTRUCTIONS}\n\n---\n\n${userInstructions}`
-                : BASE_INSTRUCTIONS;
-            updatePayload.agentUpdateRequest.instructions = fullInstructions;
-        }
-
-        if (temperature !== undefined) {
-            updatePayload.agentUpdateRequest.completionArgs = {
-                temperature: temperature
-            };
-        }
-
-        if (enableImageGen !== undefined) {
-            // If true, add the tool. If false, clear tools (or at least remove image_gen).
-            // Assuming we only manage image_generation for now.
-            updatePayload.agentUpdateRequest.tools = enableImageGen ? [{ type: "image_generation" }] : [];
-        }
-
-        const updatedAgent = await client.beta.agents.update(updatePayload);
-        console.log(`Agent updated: ${updatedAgent.id}`);
-        return updatedAgent;
-
-    } catch (error) {
-        console.error("Error updating agent persona:", error);
-        throw error;
-    }
+/**
+ * Get decision agent's system message
+ */
+export function getDecisionSystemMessage() {
+    return DECISION_INSTRUCTIONS;
 }
 
-export async function getAgentPersona() {
-    try {
-        const agentId = await getOmniAgentId();
-        const agent = await client.beta.agents.get({ agentId });
-        return agent;
-    } catch (error) {
-        console.error("Error fetching agent persona:", error);
-        throw error;
-    }
+/**
+ * Get Lumi's model parameters
+ */
+export function getLumiParams() {
+    return {
+        temperature: getTemperature(),
+        presence_penalty: getPresencePenalty(),
+        frequency_penalty: getFrequencyPenalty()
+    };
+}
+
+/**
+ * Get base instructions (for display in /configure show)
+ */
+export function getBaseInstructions() {
+    return BASE_INSTRUCTIONS;
 }
