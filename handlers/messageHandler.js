@@ -83,9 +83,16 @@ async function handleDebugOutput(debugMode, channel, lastMessage, contentStr) {
  * Call Decision Agent with granular message control
  * Returns: { decisions: [{id: string, action: string}], reason: string }
  */
-async function callDecisionAgent(history, unprocessedMessages) {
+async function callDecisionAgent(history, unprocessedMessages, isGenerating = false) {
     // Build context
     let contextContent = '';
+
+    // System Status Update
+    if (isGenerating) {
+        contextContent += '!!! SYSTEM STATUS: GENERATING_RESPONSE !!!\n';
+        contextContent += 'Lumi is currently generating a response to previous messages.\n';
+        contextContent += 'New messages usually should be WAITED for unless they are irrelevant.\n\n';
+    }
 
     // 1. History (Processed context)
     if (history.length > 0) {
@@ -182,6 +189,9 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
     const contextId = channel.id;
     const debugMode = getDebugMode(contextId);
 
+    // Start tracking generation
+    generatingChannels.add(contextId);
+
     // IMPORTANT: Get formatted history for Lumi
     const history = getFormattedHistory(contextId);
 
@@ -210,6 +220,8 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
     } catch (error) {
         console.error("Lumi error:", error);
         if (debugMode) await channel.send(`**Error**: ${error.message}`);
+    } finally {
+        generatingChannels.delete(contextId);
     }
 }
 
@@ -235,8 +247,9 @@ export async function handlePassiveMessage(messages) {
 
     // 3. Decision Agent
     const history = getFormattedHistory(contextId); // Context history
+    const isGenerating = generatingChannels.has(contextId);
     console.log("--- DECISION AGENT (Granular) ---");
-    const decisionResult = await callDecisionAgent(history, unprocessed);
+    const decisionResult = await callDecisionAgent(history, unprocessed, isGenerating);
 
     console.log(`Decision Reason: ${decisionResult.reason}`);
     decisionResult.decisions.forEach(d => console.log(` -> MSG ${d.id}: ${d.action}`));

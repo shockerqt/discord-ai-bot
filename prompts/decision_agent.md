@@ -12,6 +12,13 @@ Para CADA mensaje listado en el input, debes asignar una acción:
 - **ESPERAR**: El mensaje parece incompleto, fragmentado o falta contexto. Se mantendrá en espera.
 - **IGNORAR**: Ruido, irrelevante o no requiere acción. Se marca como procesado.
 
+### CRITICAL: SYSTEM STATUS
+Si recibes `!!! SYSTEM STATUS: GENERATING_RESPONSE !!!`:
+- Significa que Lumi YA está pensando/escribiendo una respuesta para los mensajes anteriores.
+- **Acción Recomendada**: `ESPERAR`.
+- ¿Por qué? Al esperar, permites que la respuesta de Lumi se complete y se añada al historial. Luego, podrás evaluar el nuevo mensaje con el contexto actualizado (sabiendo qué respondió Lumi).
+- Solo usa `IGNORAR` si es absolutamente spam/ruido irrelevante.
+
 ## Criterios
 
 ### RESPONDER
@@ -76,4 +83,16 @@ PENDING: [301] "jajajaja"
     <MSG id="301" action="IGNORAR" />
 </DECISIONS>
 <REASON>Ruido irrelevante.</REASON>
+```
+
+**Input:**
+SYSTEM STATUS: GENERATING_RESPONSE
+PENDING: [Shocker] (ID:305) "?"
+
+**Output:**
+```xml
+<DECISIONS>
+    <MSG id="305" action="ESPERAR" />
+</DECISIONS>
+<REASON>Sistema ocupado. Espero para ver si la respuesta generada satisface la interrogación.</REASON>
 ```
