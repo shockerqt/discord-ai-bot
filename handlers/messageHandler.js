@@ -15,13 +15,9 @@ import {
 import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
-import { scheduleResponse, cancelPendingResponse } from '../utils/responseScheduler.js';
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 const MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
-
-// Track active generation
-const generatingChannels = new Set();
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -83,24 +79,15 @@ async function handleDebugOutput(debugMode, channel, lastMessage, contentStr) {
 // ============================================================================
 
 /**
- * Call Decision Agent with granular message control
- * Returns: { decisions: [{id: string, action: string}], reason: string }
+ * Call Decision Agent with binary control (RESPONDER / IGNORAR)
  */
-async function callDecisionAgent(history, unprocessedMessages, isGenerating = false) {
+async function callDecisionAgent(history, unprocessedMessages) {
     // Build context
     let contextContent = '';
-
-    // System Status Update
-    if (isGenerating) {
-        contextContent += '!!! SYSTEM STATUS: GENERATING_RESPONSE !!!\n';
-        contextContent += 'Lumi is currently generating a response to previous messages.\n';
-        contextContent += 'New messages usually should be WAITED for unless they are irrelevant.\n\n';
-    }
 
     // 1. History (Processed context)
     if (history.length > 0) {
         contextContent += '--- CONVERSATION HISTORY (Context) ---\n';
-        // Basic reformatting for decision agent (just role: content)
         contextContent += history.map(m => `[${m.role.toUpperCase()}]: ${m.content}`).join('\n');
         contextContent += '\n\n';
     }
@@ -138,8 +125,6 @@ async function callDecisionAgent(history, unprocessedMessages, isGenerating = fa
         if (decisions.length === 0) {
             if (content.includes('RESPONDER')) {
                 unprocessedMessages.forEach(m => decisions.push({ id: m.id, action: 'RESPONDER' }));
-            } else if (content.includes('ESPERAR')) {
-                unprocessedMessages.forEach(m => decisions.push({ id: m.id, action: 'ESPERAR' }));
             } else {
                 unprocessedMessages.forEach(m => decisions.push({ id: m.id, action: 'IGNORAR' }));
             }
@@ -149,8 +134,10 @@ async function callDecisionAgent(history, unprocessedMessages, isGenerating = fa
 
     } catch (error) {
         console.error("Decision agent error:", error);
+        // Default safe action: Ignore to avoid loops on error, or Respond?
+        // Let's safe fail to Ignore.
         return {
-            decisions: unprocessedMessages.map(m => ({ id: m.id, action: 'ESPERAR' })),
+            decisions: unprocessedMessages.map(m => ({ id: m.id, action: 'IGNORAR' })),
             reason: 'Error en agente',
             rawResponse: '', contextSent: contextContent
         };
@@ -168,7 +155,8 @@ async function callLumiAgent(historyMessages, targetIds = []) {
         if (targetIds.length === 1) {
             systemContent += `\n\nSYSTEM UPDATE: You must respond specifically to the following message (identified by MsgID in history): ${targetIds[0]}.`;
         } else {
-            systemContent += `\n\nSYSTEM UPDATE: The following messages (identified by MsgID in history) form a single conversation sequence: ${targetIds.join(', ')}. Respond to them as a whole.`;
+            // Even if we removed combined logic, we still tell Lumi "these messages caused the trigger"
+            systemContent += `\n\nSYSTEM UPDATE: The interactions (identified by MsgID in history): ${targetIds.join(', ')} triggered this response. Address them.`;
         }
     }
 
@@ -193,9 +181,6 @@ async function callLumiAgent(historyMessages, targetIds = []) {
 async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
     const contextId = channel.id;
     const debugMode = getDebugMode(contextId);
-
-    // Start tracking generation
-    generatingChannels.add(contextId);
 
     // IMPORTANT: Get formatted history for Lumi
     const history = getFormattedHistory(contextId);
@@ -225,8 +210,6 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
     } catch (error) {
         console.error("Lumi error:", error);
         if (debugMode) await channel.send(`**Error**: ${error.message}`);
-    } finally {
-        generatingChannels.delete(contextId);
     }
 }
 
@@ -246,15 +229,14 @@ export async function handlePassiveMessage(messages) {
     const userMsgs = extractUserMessages(msgs);
     addUserMessages(contextId, userMsgs);
 
-    // 2. Get all Unprocessed (PENDING + WAITING)
+    // 2. Get all Unprocessed
     const unprocessed = getUnprocessedMessages(contextId);
-    if (unprocessed.length === 0) return; // Should not happen
+    if (unprocessed.length === 0) return;
 
     // 3. Decision Agent
-    const history = getFormattedHistory(contextId); // Context history
-    const isGenerating = generatingChannels.has(contextId);
-    console.log("--- DECISION AGENT (Granular) ---");
-    const decisionResult = await callDecisionAgent(history, unprocessed, isGenerating);
+    const history = getFormattedHistory(contextId);
+    console.log("--- DECISION AGENT (Binary) ---");
+    const decisionResult = await callDecisionAgent(history, unprocessed);
 
     console.log(`Decision Reason: ${decisionResult.reason}`);
     decisionResult.decisions.forEach(d => console.log(` -> MSG ${d.id}: ${d.action}`));
@@ -267,115 +249,26 @@ export async function handlePassiveMessage(messages) {
 
     // 4. Process Decisions
     const respondIds = [];
-    const waitIds = [];
     const ignoreIds = [];
 
-    // Map decisions for easy lookup
-    const decisionMap = new Map();
-    decisionResult.decisions.forEach(d => decisionMap.set(d.id, d.action));
-
-    // Iterate IN ORDER based on unprocessed list to ensure sequence reconstruction
-    let activeSequence = [];
-
-    for (const msg of unprocessed) {
-        const action = decisionMap.get(msg.id) || 'IGNORAR';
-
-        if (action === 'COMBINADO') {
-            activeSequence.push(msg.id);
-        } else if (action === 'RESPONDER') {
-            activeSequence.push(msg.id);
-            // Flush sequence to respondIds
-            respondIds.push(...activeSequence);
-            activeSequence = [];
-        } else if (action === 'ESPERAR') {
-            // If unexpected sequence before WAIT, queue them for wait too
-            if (activeSequence.length > 0) {
-                waitIds.push(...activeSequence);
-                activeSequence = [];
-            }
-            waitIds.push(msg.id);
-        } else { // IGNORAR
-            if (activeSequence.length > 0) {
-                // If sequence broken by ignore, just ignore the orphans
-                ignoreIds.push(...activeSequence);
-                activeSequence = [];
-            }
-            ignoreIds.push(msg.id);
+    decisionResult.decisions.forEach(d => {
+        if (d.action === 'RESPONDER') {
+            respondIds.push(d.id);
+        } else {
+            // IGNORAR, ESPERAR (fallback), COMBINADO (fallback) -> All treated as processed/ignored
+            ignoreIds.push(d.id);
         }
-    }
-
-    // Handle trailing orphans (COMBINADO without RESPONDER) -> WAIT
-    if (activeSequence.length > 0) {
-        waitIds.push(...activeSequence);
-    }
+    });
 
     // Update States
     if (respondIds.length > 0) updateMessageStatus(contextId, respondIds, MSG_STATUS.PROCESSED);
     if (ignoreIds.length > 0) updateMessageStatus(contextId, ignoreIds, MSG_STATUS.PROCESSED);
-    if (waitIds.length > 0) updateMessageStatus(contextId, waitIds, MSG_STATUS.WAITING);
 
     // 5. Execution Logic
-
-    // Determine overall status for logging
-    const hasResponse = respondIds.length > 0;
-    const hasWait = waitIds.length > 0;
-
-    if (hasResponse) {
-        // Trigger Lumi immediately for the ones that need response
-        cancelPendingResponse(contextId); // Cancel previous timer
-
-        // If we also have waiting messages, we should probably start a new timer for them?
-        // OR, if we are responding, maybe we should respond to EVERYTHING now to avoid fragmentation?
-        // Current logic: Respond only to 'respondIds'. 'waitIds' stay waiting.
-
+    if (respondIds.length > 0) {
+        // Trigger Lumi immediately
         await triggerLumiResponse(lastMessage.channel, lastMessage, respondIds);
-
-        // If there are lingering wait items left behind, start a timer for them
-        if (hasWait) {
-            console.log(`[Scheduler] Keeping timer needed for ${waitIds.length} waiting messages.`);
-            scheduleResponse(contextId, 10000, () => handleTimeout(contextId, lastMessage.channel));
-        }
-    } else if (hasWait) {
-        // No response, but waiting -> Start/Reset Timer
-        console.log(`[Scheduler] Waiting 10s for ${waitIds.length} messages...`);
-        scheduleResponse(contextId, 10000, () => handleTimeout(contextId, lastMessage.channel));
     } else {
-        // All ignored
         console.log("[Decision] All messages ignored.");
-        // Should we cancel timer? Converting everything to ignore generally means "done".
-        // But if there was a timer running for previous messages, and we just ignored NEW ones, 
-        // we shouldn't kill the old timer unless the old ones were also considered here.
-        // Processed messages are handled.
-    }
-}
-
-/**
- * Handle Timeout (force process remaining waiting messages)
- */
-async function handleTimeout(contextId, channel) {
-    console.log(`[Timeout] Force processing waiting messages for ${contextId}`);
-
-    const waitingMessages = getUnprocessedMessages(contextId);
-    if (waitingMessages.length === 0) return;
-
-    const ids = waitingMessages.map(m => m.id);
-
-    // Mark all as processed
-    updateMessageStatus(contextId, ids, MSG_STATUS.PROCESSED);
-
-    // Trigger Lumi
-    // Need a dummy message object for lastMessage? Or just use null and handle safe in trigger
-    // We pass null as lastMessage for reply context if not available, but triggerLumiResponse needs lastMessage for reactions.
-    // Ideally we should cache last message object or fetch it.
-    // For now, we will try to fetch or just error safe.
-
-    try {
-        // Hack: triggerLumiResponse needs a message object mostly for channel.send and reactions.
-        // We have channel object. We don't have msg object for reactions if we don't fetch it.
-        // Passing { channel, id: null } allows sending text but fail reactions.
-        const dummyMsg = { channel, id: null };
-        await triggerLumiResponse(channel, dummyMsg, ids);
-    } catch (e) {
-        console.error("Timeout trigger error:", e);
     }
 }
