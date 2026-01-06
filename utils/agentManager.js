@@ -35,14 +35,23 @@ export async function getLumiSystemMessage(context = {}) {
         instructions += `\n\n---\n\n${personality}`;
     }
 
-    // Dynamic Emoji Injection
-    // Dynamic Emoji Injection
+    // Dynamic Emoji Injection (Simplified Mapping)
     // Collect from Guild AND Application
     const allEmojis = [];
 
     // Resolve Client
     const client = context.client || context.channel?.client;
 
+    // Helper to format emoji for list
+    const formatEmojiForList = (e) => {
+        let label = e.name;
+        if (label.toLowerCase().includes('sappy')) {
+            label += ' (foca)';
+        }
+        return label;
+    };
+
+    // 1. App Emojis
     if (client && client.application) {
         // App emojis are usually global, but let's check cache first
         if (client.application.emojis.cache.size === 0 && !hasFetchedAppEmojis) {
@@ -55,7 +64,7 @@ export async function getLumiSystemMessage(context = {}) {
                 hasFetchedAppEmojis = true;
             }
         }
-        const appEmojis = client.application.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`);
+        const appEmojis = client.application.emojis.cache.map(formatEmojiForList);
         allEmojis.push(...appEmojis);
         console.log(`[SystemPrompt] App emojis found: ${appEmojis.length}`);
     } else {
@@ -80,7 +89,7 @@ export async function getLumiSystemMessage(context = {}) {
             }
         }
 
-        const guildEmojis = guild.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`);
+        const guildEmojis = guild.emojis.cache.map(formatEmojiForList);
         allEmojis.push(...guildEmojis);
         console.log(`[SystemPrompt] Guild emojis found: ${guildEmojis.length}`);
     } else {
@@ -92,12 +101,15 @@ export async function getLumiSystemMessage(context = {}) {
 
     if (uniqueEmojiList.length > 0) {
         instructions += `\n\n## EMOJIS DISPONIBLES
-Puedes usar tanto emojis estándar (Unicode) como los siguientes emojis personalizados del servidor.
-PREFERENCIA: Intenta usar los emojis personalizados cuando encajen, ya que dan más carácter y personalidad al mensaje.
-REGLA DE FORMATO: Para los personalizados, debes copiar EXACTAMENTE el código completo (ej: <:pepe:123>).
+Puedes usar tanto emojis estándar (Unicode) como los siguientes emojis personalizados.
+PREFERENCIA: Intenta usar los emojis personalizados cuando encajen.
+NOTA: Los emojis marcados como "(foca)" son de focas, ¡TUS FAVORITOS! Úsalos si hablas de ellas o quieres ser tierna.
 
-LISTA DE EMOJIS PERSONALIZADOS:
-${uniqueEmojiList.join(' ')}`;
+REGLA DE FORMATO: Solo escribe el nombre del emoji entre dos puntos. 
+Ejemplo: si en la lista dice "pepe", tú escribe :pepe:. Si dice "sappy_love (foca)", escribe :sappy_love:.
+
+LISTA:
+${uniqueEmojiList.join(', ')}`;
     } else {
         console.log('[SystemPrompt] No emojis (guild or app) available to inject.');
     }
