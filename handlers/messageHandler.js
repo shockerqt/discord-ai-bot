@@ -1,10 +1,11 @@
 /**
  * Message Handler - Maneja mensajes pasivos del bot
  * Usa cadena de agentes: Decision Agent -> Lumi
+ * Usa completions API con mensajes en memoria
  */
 import { Mistral } from '@mistralai/mistralai';
-import { getConversationId, setConversationId } from '../utils/conversationStore.js';
 import { getOmniAgentId, getDecisionAgentId } from '../utils/agentManager.js';
+import { getMessages, addUserMessage, addAssistantMessage } from '../utils/messageStore.js';
 import { debugChannels } from '../commands/debug.js';
 
 // Importar módulos del handler
@@ -63,16 +64,16 @@ export async function handlePassiveMessage(messages) {
 
     // Construct Context from Batch
     const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' });
-    let messageContext = "--- CURRENT MESSAGES ---\n";
+    let messageContent = "";
 
     for (const msg of msgs) {
         const authorName = msg.member ? msg.member.displayName : msg.author.username;
-        messageContext += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${authorName}: ${msg.content}\n`;
+        messageContent += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${authorName}: ${msg.content}\n`;
     }
 
     // 1. Call Decision Agent
     console.log("--- CALLING DECISION AGENT ---");
-    const decision = await callDecisionAgent(messageContext);
+    const decision = await callDecisionAgent(messageContent);
     console.log(`Decision: ${decision.shouldRespond ? 'RESPONDER' : 'IGNORAR'} - ${decision.reason}`);
 
     // Debug: Show decision
@@ -99,15 +100,20 @@ export async function handlePassiveMessage(messages) {
         return;
     }
 
-    // 3. Call Lumi (main agent)
+    // 3. Add user message to history
+    addUserMessage(contextId, messageContent);
+
+    // 4. Call Lumi (main agent) using completions API
     console.log("--- CALLING LUMI AGENT ---");
 
     // Debug: Echo Input to Chat (only in 'full' mode)
     if (debugMode === 'full') {
-        const buffer = Buffer.from('\uFEFF' + messageContext, 'utf-8');
+        const historyMessages = getMessages(contextId);
+        const historyContent = historyMessages.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
+        const buffer = Buffer.from('\uFEFF' + historyContent, 'utf-8');
         try {
             await lastMessage.channel.send({
-                content: `**[DEBUG INPUT]**`,
+                content: `**[DEBUG INPUT]** (${historyMessages.length} messages in history)`,
                 files: [{
                     attachment: buffer,
                     name: `debug-input-${Date.now()}.txt`
@@ -119,37 +125,16 @@ export async function handlePassiveMessage(messages) {
     }
 
     try {
-        let conversationId = getConversationId(contextId);
-        let contentStr = "";
-        let response;
+        const agentId = await getOmniAgentId();
+        const historyMessages = getMessages(contextId);
 
-        if (!conversationId) {
-            const agentId = await getOmniAgentId();
-            response = await client.beta.conversations.start({
-                agentId: agentId,
-                inputs: [{ role: 'user', content: messageContext }]
-            });
+        // Call completions API with message history
+        const response = await client.beta.agents.complete({
+            agentId: agentId,
+            messages: historyMessages
+        });
 
-            if (response && response.conversationId) {
-                conversationId = response.conversationId;
-                setConversationId(contextId, conversationId);
-            }
-        } else {
-            response = await client.beta.conversations.append({
-                conversationId: conversationId,
-                conversationAppendRequest: {
-                    inputs: [{ role: 'user', content: messageContext }]
-                }
-            });
-        }
-
-        // Extraer contenido de la respuesta
-        if (response.outputs && response.outputs.length > 0) {
-            const output = response.outputs.find(o => o.role === 'assistant' || o.content);
-            if (output) {
-                contentStr = output.content;
-            }
-        }
+        const contentStr = response.choices?.[0]?.message?.content || '';
 
         if (!contentStr) {
             console.log("[DEBUG] Empty content extracted. Full Response:", JSON.stringify(response, null, 2));
@@ -167,9 +152,14 @@ export async function handlePassiveMessage(messages) {
         console.log(parsedResponse);
         console.log("-----------------------");
 
+        // 5. Add ONLY the visible response to history (not the full XML with thoughts)
+        if (parsedResponse.send_text && parsedResponse.text_content) {
+            addAssistantMessage(contextId, parsedResponse.text_content);
+        }
+
         // Debug Mode Output
         if (debugMode === 'full') {
-            await sendDebugOutput(lastMessage.channel, 'Decision Agent', contentStr);
+            await sendDebugOutput(lastMessage.channel, 'Completions API', contentStr);
         } else if (debugMode === 'thoughts') {
             // Extract only the THOUGHT section
             const thoughtMatch = contentStr.match(/<THOUGHT>([\s\S]*?)<\/THOUGHT>/i);

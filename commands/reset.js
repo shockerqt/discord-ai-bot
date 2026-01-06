@@ -1,5 +1,5 @@
 import { InteractionResponseType } from 'discord-interactions';
-import { deleteConversationId } from '../utils/conversationStore.js';
+import { clearMessages, getMessageCount } from '../utils/messageStore.js';
 
 export const data = {
     name: 'reset',
@@ -12,12 +12,13 @@ export const data = {
 export async function execute(req, res) {
     const { channel_id } = req.body;
 
-    deleteConversationId(channel_id);
+    const previousCount = getMessageCount(channel_id);
+    clearMessages(channel_id);
 
     return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-            content: '🧹 Conversation history has been reset for this channel.',
+            content: `🧹 Conversation history has been reset for this channel. (${previousCount} messages cleared)`,
         },
     });
 }
