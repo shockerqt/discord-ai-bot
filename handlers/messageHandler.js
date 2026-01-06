@@ -46,7 +46,8 @@ function extractUserMessages(msgs) {
         userId: msg.author.id,
         userName: msg.member?.displayName || msg.author.username,
         content: msg.content,
-        timestamp: now
+        timestamp: now,
+        messageId: msg.id
     }));
 }
 
@@ -212,8 +213,10 @@ ${decision.rawResponse}`;
     console.log("--- LUMI AGENT ---");
 
     if (debugMode === 'full') {
-        const historyDebug = history.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
-        await sendDebugAttachment(lastMessage.channel, `DEBUG INPUT (${history.length} msgs)`, historyDebug);
+        const systemMsg = getLumiSystemMessage();
+        const historyDebug = `[SYSTEM MESSAGE]\n${systemMsg}\n\n---\n\n` +
+            history.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
+        await sendDebugAttachment(lastMessage.channel, `🤖 LUMI INPUT (${history.length} msgs)`, historyDebug);
     }
 
     try {

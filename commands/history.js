@@ -14,6 +14,10 @@ export async function execute(req, res) {
     const messages = getMessages(channel_id);
     const count = getMessageCount(channel_id);
 
+    console.log(`--- HISTORY COMMAND (${count} messages) ---`);
+    console.log(JSON.stringify(messages, null, 2));
+    console.log("-------------------------------------------");
+
     if (count === 0) {
         return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,

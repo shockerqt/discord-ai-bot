@@ -46,7 +46,7 @@ export function addUserMessages(channelId, userMessages) {
     const previousUserId = lastUserId.get(channelId);
 
     for (const msg of userMessages) {
-        const formattedLine = `[${msg.timestamp}] ${msg.userName}: ${msg.content}`;
+        const formattedLine = `[${msg.timestamp}] (MsgID:${msg.messageId}) ${msg.userName}: ${msg.content}`;
 
         // Check if we can append to the last message (same user, last message is 'user')
         const lastMsg = messages[messages.length - 1];
