@@ -60,10 +60,8 @@ export function getLumiSystemMessage(context = {}) {
 
     if (uniqueEmojiList.length > 0) {
         instructions += `\n\n## EMOJIS DISPONIBLES
-Puedes usar cualquier emoji estándar de Unicode (ej: 🔥, 😂).
-TAMBIÉN puedes usar los siguientes emojis personalizados del servidor/app.
-IMPORTANTE: Para usarlos, DEBES escribirlos exactamente como aparecen entre paréntesis, incluyendo los corchetes angulares.
-Formato: <:nombre:id> o <a:nombre:id> (animado).
+PRIORIDAD: PREFIERE SIEMPRE usar estos emojis personalizados antes que los estándar si encajan en el contexto. Dan más personalidad.
+Formato OBLIGATORIO: Copia el código exacto, ej: <:pepe:12345>.
 
 Lista:
 ${uniqueEmojiList.join(', ')}`;
