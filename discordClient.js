@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, Events } from 'discord.js';
 import { handlePassiveMessage } from './handlers/messageHandler.js';
 import { enqueueMessage } from './utils/messageQueue.js';
 
@@ -12,7 +12,7 @@ const client = new Client({
     ],
 });
 
-client.on('messageCreate', async (message) => {
+client.on(Events.MessageCreate, async (message) => {
     // Ignore bot messages
     if (message.author.bot) return;
 
@@ -24,7 +24,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-client.on('ready', async () => {
+client.on(Events.ClientReady, async () => {
     console.log(`[Discord] Logged in as ${client.user.tag}!`);
     try {
         if (client.application) {
