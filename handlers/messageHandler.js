@@ -161,6 +161,7 @@ import { getToolDefinitions, executeTool } from '../utils/tools/registry.js';
  * Call Lumi Agent with Tool Support
  */
 async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
+    console.log(`[callLumiAgent] Context keys: ${Object.keys(context).join(',')}`);
     let systemContent = getLumiSystemMessage(context);
 
     // Inject focus instructions if IDs present
@@ -194,6 +195,8 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
                 presence_penalty: params.presence_penalty,
                 frequency_penalty: params.frequency_penalty
             });
+
+            console.log('MESSAGES', messages);
 
             const choice = response.choices?.[0];
             const message = choice?.message;
