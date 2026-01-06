@@ -10,7 +10,10 @@ Para CADA mensaje listado en el input, debes asignar una acción:
 ## Criterios
 
 ### RESPONDER
-- **Mensaje Completo**: Debe ser una idea terminada. Evita responder a oraciones subordinadas sueltas ("si los mensajes...", "porque el otro día...", "cuando el servidor...") si no tienen conclusión.
+### RESPONDER
+- **Mensaje Completo**: Debe ser una idea terminada y con sentido completo.
+    - **Incorrecto**: "que opinas de que los zorros" (Falta el predicado: ¿qué hacen los zorros?).
+    - **Correcto**: "que opinas de los zorros" o "que opinas de que los zorros sean invasivos".
 - **Certeza**: Ante la duda de si el usuario va a escribir más, prefiere IGNORAR. Es mejor callar que interrumpir una frase a medias.
 - Preguntas, saludos, o temas donde la opinión de Lumi es relevante.
 - **Secuencias**: Si el usuario envía varios mensajes seguidos que forman una idea, marca como RESPONDER solo al último (o al que completa la idea). Marca los anteriores como IGNORAR.
@@ -76,4 +79,15 @@ PENDING: [Shocker] (ID:405) "si los mensajes"
     <MSG id="405" action="IGNORAR" />
 </DECISIONS>
 <REASON>Oración subordinada incompleta ('si...'). Espero el resto.</REASON>
+```
+
+**Input:**
+PENDING: [Shocker] (ID:408) "que opinas de que los zorros"
+
+**Output:**
+```xml
+<DECISIONS>
+    <MSG id="408" action="IGNORAR" />
+</DECISIONS>
+<REASON>Incompleto semánticamente. Falta el predicado (¿qué pasa con ellos?).</REASON>
 ```
