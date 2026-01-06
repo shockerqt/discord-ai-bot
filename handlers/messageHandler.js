@@ -6,21 +6,11 @@ import { Mistral } from '@mistralai/mistralai';
 import { getConversationId, setConversationId } from '../utils/conversationStore.js';
 import { getOmniAgentId } from '../utils/agentManager.js';
 import { debugChannels } from '../commands/debug.js';
-import { readFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 
 // Importar módulos del handler
 import { determineMode } from './message/modeHandler.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
-
-// ES Module directory resolution
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Load prompts from external files
-const OUTPUT_INSTRUCTION = readFileSync(join(__dirname, '../prompts/output_format.md'), 'utf-8');
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 
@@ -55,9 +45,8 @@ export async function handlePassiveMessage(messages) {
         fullContent += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${authorName}: ${msg.content}\n`;
     }
 
-    // Append instructions
+    // Append mode instruction
     fullContent += forcedInstruction;
-    fullContent += OUTPUT_INSTRUCTION;
 
     // Log Prompt
     console.log("--- PROMPT SENT TO AGENT ---");

@@ -1,10 +1,20 @@
 import { Mistral } from '@mistralai/mistralai';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+// ES Module directory resolution
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 let cachedAgentId = null;
 
 const AGENT_NAME = "Lumi";
 const AGENT_DESCRIPTION = "shitposting 24/7. si me pingueas me das cringe. no soy soporte técnico.";
+
+// Base instructions that are ALWAYS present (output format)
+const BASE_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/output_format.md'), 'utf-8');
 
 export async function getOmniAgentId() {
     if (cachedAgentId) return cachedAgentId;
@@ -35,6 +45,7 @@ export async function getOmniAgentId() {
             model: "mistral-large-latest",
             name: AGENT_NAME,
             description: AGENT_DESCRIPTION,
+            instructions: BASE_INSTRUCTIONS, // Load base instructions on creation
             // tools: [{ type: "image_generation" }], // Disabled to allow rate limit recovery
             temperature: 0.7, // Default temperature if supported at top level, otherwise ignored
         });
@@ -49,7 +60,14 @@ export async function getOmniAgentId() {
     }
 }
 
-export async function updateAgentPersona(instructions, temperature, enableImageGen) {
+/**
+ * Get base instructions (output format)
+ */
+export function getBaseInstructions() {
+    return BASE_INSTRUCTIONS;
+}
+
+export async function updateAgentPersona(userInstructions, temperature, enableImageGen) {
     try {
         const agentId = await getOmniAgentId();
         console.log(`Updating agent ${agentId} with new persona...`);
@@ -61,8 +79,12 @@ export async function updateAgentPersona(instructions, temperature, enableImageG
             }
         };
 
-        if (instructions !== undefined) {
-            updatePayload.agentUpdateRequest.instructions = instructions;
+        if (userInstructions !== undefined) {
+            // Always prepend BASE_INSTRUCTIONS to user instructions
+            const fullInstructions = userInstructions
+                ? `${BASE_INSTRUCTIONS}\n\n---\n\n${userInstructions}`
+                : BASE_INSTRUCTIONS;
+            updatePayload.agentUpdateRequest.instructions = fullInstructions;
         }
 
         if (temperature !== undefined) {

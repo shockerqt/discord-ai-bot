@@ -79,7 +79,7 @@ export async function execute(req, res) {
     const endpoint = `webhooks/${application_id}/${token}/messages/@original`;
 
     try {
-        const { updateAgentPersona, getAgentPersona } = await import('../utils/agentManager.js');
+        const { updateAgentPersona, getAgentPersona, getBaseInstructions } = await import('../utils/agentManager.js');
         const { client: discordClient } = await import('../discordClient.js');
 
         const subCommand = data.options[0].name;
@@ -88,13 +88,24 @@ export async function execute(req, res) {
         // SHOW - Display current settings
         if (subCommand === 'show') {
             const currentParams = await getAgentPersona();
+            const fullInstructions = currentParams.instructions || '';
+            const baseInstructions = getBaseInstructions();
 
-            const currentInstructions = currentParams.instructions || '';
+            // Extract user instructions (remove base + separator)
+            let userInstructions = fullInstructions;
+            const separator = '\n\n---\n\n';
+            if (fullInstructions.startsWith(baseInstructions)) {
+                const afterBase = fullInstructions.slice(baseInstructions.length);
+                userInstructions = afterBase.startsWith(separator)
+                    ? afterBase.slice(separator.length)
+                    : afterBase;
+            }
+
             const currentTemp = currentParams.temperature ?? (currentParams.completionArgs?.temperature) ?? "Default";
             const currentTools = currentParams.tools || [];
             const hasImageGen = currentTools.some(t => t.type === 'image_generation');
 
-            const personalityBuffer = Buffer.from('\uFEFF' + currentInstructions, 'utf-8');
+            const personalityBuffer = Buffer.from('\uFEFF' + (userInstructions || '(No custom personality set)'), 'utf-8');
 
             const channel = await discordClient.channels.fetch(channel_id);
             if (!channel) throw new Error("Channel not found.");
@@ -117,7 +128,7 @@ export async function execute(req, res) {
 
             await DiscordRequest(endpoint, {
                 method: 'PATCH',
-                body: { content: '🗑️ **Personality cleared!** The bot now has no custom instructions.' }
+                body: { content: '🗑️ **Personality cleared!** Base instructions (output format) are preserved.' }
             });
             return;
         }
@@ -156,20 +167,34 @@ export async function execute(req, res) {
                 return;
             }
 
-            let instructions = '';
+            let userInstructions = '';
 
             // File overwrites, text appends
             if (fileOption) {
-                instructions = newText; // Overwrite
+                userInstructions = newText; // Overwrite
             } else {
+                // Extract current user instructions (without BASE)
                 const currentParams = await getAgentPersona();
-                const currentInstructions = currentParams.instructions || '';
-                instructions = currentInstructions
-                    ? `${currentInstructions}\n\n${newText}`
+                const fullInstructions = currentParams.instructions || '';
+                const baseInstructions = getBaseInstructions();
+                const separator = '\n\n---\n\n';
+
+                let currentUserInstructions = '';
+                if (fullInstructions.startsWith(baseInstructions)) {
+                    const afterBase = fullInstructions.slice(baseInstructions.length);
+                    currentUserInstructions = afterBase.startsWith(separator)
+                        ? afterBase.slice(separator.length)
+                        : afterBase;
+                } else {
+                    currentUserInstructions = fullInstructions;
+                }
+
+                userInstructions = currentUserInstructions
+                    ? `${currentUserInstructions}\n\n${newText}`
                     : newText;
             }
 
-            const updatedAgent = await updateAgentPersona(instructions, undefined, undefined);
+            const updatedAgent = await updateAgentPersona(userInstructions, undefined, undefined);
             await sendConfigUpdate(discordClient, channel_id, updatedAgent, endpoint, DiscordRequest);
             return;
         }
