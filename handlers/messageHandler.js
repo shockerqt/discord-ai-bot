@@ -195,18 +195,12 @@ export async function handlePassiveMessage(messages) {
     console.log(`Decision: ${decision.shouldRespond ? 'RESPONDER' : 'IGNORAR'} - ${decision.reason}`);
 
     if (debugMode === 'full') {
-        const decisionDebug = `========== DECISION CHAIN ==========
-
-[INPUT TO DECISION AGENT]
+        const decisionDebug = `[INPUT TO DECISION AGENT]
 ${decision.contextSent}
 
-[DECISION AGENT OUTPUT]
-${decision.rawResponse}
-
-[PARSED RESULT]
-DECISION: ${decision.shouldRespond ? 'RESPONDER' : 'IGNORAR'}
-REASON: ${decision.reason}`;
-        await sendDebugAttachment(lastMessage.channel, '🧠 DECISION CHAIN', decisionDebug, lastMessage.id);
+[RAW OUTPUT]
+${decision.rawResponse}`;
+        await sendDebugAttachment(lastMessage.channel, '🧠 DECISION', decisionDebug, lastMessage.id);
     }
 
     if (!decision.shouldRespond) {
