@@ -149,3 +149,6 @@ export function clearMessages(channelId) {
 export function getMessageCount(channelId) {
     return getRawMessages(channelId).length;
 }
+
+// Alias for compatibility
+export { getFormattedHistory as getMessages };
