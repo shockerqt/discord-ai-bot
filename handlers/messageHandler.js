@@ -214,12 +214,24 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
                     // await new Promise(r => setTimeout(r, 200)); 
                     // Not strictly necessary if await sendTextMessage waits for API. Await is sufficient.
                 }
+
+                if (msg.reaction) {
+                    let reactionTarget = lastMessage;
+                    if (msg.reply_to && msg.reply_to !== lastMessage.id && msg.reply_to.toLowerCase() !== 'null') {
+                        try {
+                            reactionTarget = await channel.messages.fetch(msg.reply_to);
+                        } catch (e) {
+                            console.warn(`Could not fetch message ${msg.reply_to} for reaction:`, e.message);
+                        }
+                    }
+                    await sendReactions(reactionTarget, msg.reaction);
+                }
             }
         }
 
         await handleDebugOutput(debugMode, channel, lastMessage, rawResponse);
         // await sendTextMessage(channel, parsed); // Removed single call
-        await sendReactions(lastMessage, parsed.reaction);
+        // await sendReactions(lastMessage, parsed.reaction); // Global Replaced by per-message
 
     } catch (error) {
         console.error("Lumi error:", error);

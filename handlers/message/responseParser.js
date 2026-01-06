@@ -32,28 +32,30 @@ export function parseAIResponse(rawContent) {
     let match;
     while ((match = msgRegex.exec(contentStr)) !== null) {
         const msgBlock = match[1];
-        const sendTextRaw = extractTag(msgBlock, 'SEND_TEXT');
         const textContent = extractTag(msgBlock, 'TEXT_CONTENT');
         const replyToRaw = extractTag(msgBlock, 'REPLY_TO');
+        const reactionRaw = extractTag(msgBlock, 'REACTION');
 
         messages.push({
-            send_text: sendTextRaw && sendTextRaw.toUpperCase().includes('TRUE'),
+            send_text: !!(textContent && textContent.trim().length > 0),
             text_content: textContent || "",
-            reply_to: (replyToRaw && replyToRaw.toUpperCase() !== 'NULL') ? replyToRaw : null
+            reply_to: (replyToRaw && replyToRaw.toUpperCase() !== 'NULL') ? replyToRaw : null,
+            reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null
         });
     }
 
     // Fallback: If no MESSAGE block found (legacy or error), try parsing root tags
     if (messages.length === 0) {
-        const sendTextRaw = extractTag(contentStr, 'SEND_TEXT');
         const textContent = extractTag(contentStr, 'TEXT_CONTENT');
         const replyToRaw = extractTag(contentStr, 'REPLY_TO');
+        const reactionRaw = extractTag(contentStr, 'REACTION');
 
-        if (sendTextRaw || textContent) {
+        if (textContent || reactionRaw) {
             messages.push({
-                send_text: sendTextRaw && sendTextRaw.toUpperCase().includes('TRUE'),
+                send_text: !!(textContent && textContent.trim().length > 0),
                 text_content: textContent || "",
-                reply_to: (replyToRaw && replyToRaw.toUpperCase() !== 'NULL') ? replyToRaw : null
+                reply_to: (replyToRaw && replyToRaw.toUpperCase() !== 'NULL') ? replyToRaw : null,
+                reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null
             });
         }
     }
@@ -61,7 +63,7 @@ export function parseAIResponse(rawContent) {
     return {
         thought: thought || "",
         messages: messages,
-        reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null
+        reaction: null // Global reaction deprecated in favor of per-message
     };
 }
 

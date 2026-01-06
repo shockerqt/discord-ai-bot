@@ -10,20 +10,13 @@ Piensa brevemente:
 </THOUGHT>
 
 <MESSAGE>
-<SEND_TEXT>TRUE</SEND_TEXT>
 <TEXT_CONTENT>
-Tu respuesta de texto aquí. Vacío si SEND_TEXT es FALSE.
+Tu respuesta de texto aquí.
 </TEXT_CONTENT>
 <REPLY_TO>
-ID del mensaje (MsgID) al que respondes específicamente o NULL.
+ID del mensaje (MsgID) al que respondes/reaccionas o NULL.
 </REPLY_TO>
-</MESSAGE>
-
-<!-- Puedes repetir el bloque MESSAGE si necesitas enviar otro mensaje separado -->
-<MESSAGE>
-...
-</MESSAGE>
-
 <REACTION>
-Uno o más emojis (ej: 😂 o 🔥💀) o NULL. (Global para el último mensaje del usuario)
+Uno o más emojis (ej: 😂 o 🔥💀) o NULL. (Reacción al mensaje especificado en REPLY_TO o al último)
 </REACTION>
+</MESSAGE>
