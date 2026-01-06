@@ -43,7 +43,7 @@ export async function sendReactions(message, reactionString) {
         const match = reactionString.match(customEmojiRegex);
         if (match) {
             emojiToReact = match[1]; // Use the ID
-            console.log(`[Reactions] Extracted ID ${emojiToReact} from ${reaction}`);
+            console.log(`[Reactions] Extracted ID ${emojiToReact} from ${reactionString}`);
         }
 
         await message.react(emojiToReact);
