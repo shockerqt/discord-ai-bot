@@ -59,7 +59,14 @@ export function getLumiSystemMessage(context = {}) {
     const uniqueEmojiList = [...new Set(allEmojis)].slice(0, 100);
 
     if (uniqueEmojiList.length > 0) {
-        instructions += `\n\n## EMOJIS DISPONIBLES\nPuedes usar cualquier emoji estándar de Unicode (ej: 🔥, 😂).\nTAMBIÉN puedes usar los siguientes emojis personalizados del servidor/app:\n${uniqueEmojiList.join(', ')}`;
+        instructions += `\n\n## EMOJIS DISPONIBLES
+Puedes usar cualquier emoji estándar de Unicode (ej: 🔥, 😂).
+TAMBIÉN puedes usar los siguientes emojis personalizados del servidor/app.
+IMPORTANTE: Para usarlos, DEBES escribirlos exactamente como aparecen entre paréntesis, incluyendo los corchetes angulares.
+Formato: <:nombre:id> o <a:nombre:id> (animado).
+
+Lista:
+${uniqueEmojiList.join(', ')}`;
     } else {
         console.log('[SystemPrompt] No emojis (guild or app) available to inject.');
     }
