@@ -36,25 +36,30 @@ export async function getLumiSystemMessage(context = {}) {
     }
 
     // Dynamic Emoji Injection
+    // Dynamic Emoji Injection
     // Collect from Guild AND Application
     const allEmojis = [];
 
-    // 1. App Emojis
-    if (context.client && context.client.application) {
-        // Fetch only if cache empty AND haven't fetched yet
-        if (context.client.application.emojis.cache.size === 0 && !hasFetchedAppEmojis) {
+    // Resolve Client
+    const client = context.client || context.channel?.client;
+
+    if (client && client.application) {
+        // App emojis are usually global, but let's check cache first
+        if (client.application.emojis.cache.size === 0 && !hasFetchedAppEmojis) {
             try {
                 console.log('[SystemPrompt] Fetching App Emojis...');
-                await context.client.application.emojis.fetch();
+                await client.application.emojis.fetch();
             } catch (e) {
                 console.error('[SystemPrompt] Failed to fetch app emojis:', e);
             } finally {
                 hasFetchedAppEmojis = true;
             }
         }
-        const appEmojis = context.client.application.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`);
+        const appEmojis = client.application.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`);
         allEmojis.push(...appEmojis);
         console.log(`[SystemPrompt] App emojis found: ${appEmojis.length}`);
+    } else {
+        console.log('[SystemPrompt] Client or Application not found in context.');
     }
 
     // 2. Guild Emojis

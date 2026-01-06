@@ -161,14 +161,7 @@ import { getToolDefinitions, executeTool } from '../utils/tools/registry.js';
  * Call Lumi Agent with Tool Support
  */
 async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
-    console.log(`[callLumiAgent] Context keys: ${Object.keys(context).join(',')}`);
     let systemContent = await getLumiSystemMessage(context);
-    console.log(`[callLumiAgent] System Prompt Length: ${systemContent.length}`);
-    console.log(`[callLumiAgent] Includes 'EMOJIS': ${systemContent.includes('EMOJIS')}`);
-    if (systemContent.includes('EMOJIS')) {
-        // Log a snippet to verify formatting
-        console.log(`[callLumiAgent] Emoji Snippet: ${systemContent.substring(systemContent.indexOf('EMOJIS'), systemContent.indexOf('EMOJIS') + 200)}`);
-    }
 
     // Inject focus instructions if IDs present
     if (targetIds && targetIds.length > 0) {
@@ -201,8 +194,6 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
                 presence_penalty: params.presence_penalty,
                 frequency_penalty: params.frequency_penalty
             });
-
-            console.log("MESSAGES", messages);
 
             const choice = response.choices?.[0];
             const message = choice?.message;
@@ -298,7 +289,7 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
 
     try {
         // Generate response
-        const { response: finalResponse, trace } = await callLumiAgent(history, targetIds);
+        const { response: finalResponse, trace } = await callLumiAgent(history, targetIds, promptContext);
 
         // DEBUG: Full trace including tools
         if (debugMode === 'full' && trace) {
