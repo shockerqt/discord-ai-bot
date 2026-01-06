@@ -3,6 +3,9 @@
  * Evita errores cuando el agente está procesando un mensaje
  */
 
+import { addUserMessages } from './messageStore.js';
+import { extractUserMessages } from '../handlers/messageHandler.js';
+
 // Cola de mensajes por canal: Map<channelId, { queue: Message[], processing: boolean }>
 const channelQueues = new Map();
 
@@ -12,6 +15,10 @@ const channelQueues = new Map();
  * @param {Function} processor - Función async para procesar el mensaje
  */
 export async function enqueueMessage(message, processor) {
+    // Save to history IMMEDIATELY (inside queue)
+    const userMsgs = extractUserMessages([message]);
+    addUserMessages(message.channel.id, userMsgs);
+
     const channelId = message.channel.id;
 
     // Inicializar cola si no existe
