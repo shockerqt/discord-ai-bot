@@ -98,7 +98,7 @@ async function callDecisionAgent(history, unprocessedMessages) {
     // 2. Unprocessed Messages (Actionable items)
     contextContent += '--- UNPROCESSED MESSAGES (Evaluate these) ---\n';
     unprocessedMessages.forEach(msg => {
-        contextContent += `${msg.status}: [${msg.id}] "${msg.content}"\n`;
+        contextContent += `${msg.status}: [${msg.author}] (ID:${msg.id}) "${msg.content}"\n`;
     });
 
     try {

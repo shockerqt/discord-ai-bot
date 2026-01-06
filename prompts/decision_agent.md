@@ -16,8 +16,6 @@ Para CADA mensaje listado en el input, debes asignar una acción:
 
 ### RESPONDER
 - Mensaje completo y claro.
-### RESPONDER
-- Mensaje completo y claro.
 - **Secuencias**: Si varios mensajes forman una idea, marca como RESPONDER al último.
 
 ### COMBINADO (Contexto)
@@ -44,8 +42,21 @@ Para CADA mensaje listado en el input, debes asignar una acción:
 ## Ejemplos
 
 **Input:**
-WAITING: [201] "Tengo una duda..."
-PENDING: [202] "sobre la vida"
+PENDING: [Shocker] (ID:105) "Lumi"
+PENDING: [Shocker] (ID:106) "qué hora es"
+
+**Output:**
+```xml
+<DECISIONS>
+    <MSG id="105" action="COMBINADO" />
+    <MSG id="106" action="RESPONDER" />
+</DECISIONS>
+<REASON>105 y 106 son la misma frase de Shocker. Respondo al final.</REASON>
+```
+
+**Input:**
+WAITING: [UserA] (ID:201) "Tengo una duda..."
+PENDING: [UserA] (ID:202) "sobre la vida"
 
 **Output:**
 ```xml
@@ -53,7 +64,7 @@ PENDING: [202] "sobre la vida"
     <MSG id="201" action="COMBINADO" />
     <MSG id="202" action="RESPONDER" />
 </DECISIONS>
-<REASON>Msg 202 completa la frase. 201 se combina.</REASON>
+<REASON>Msg 202 completa la frase de UserA. Se combinan.</REASON>
 ```
 
 **Input:**
