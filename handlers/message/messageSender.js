@@ -34,21 +34,21 @@ export async function sendReactions(message, reactionString) {
     if (!message || typeof message.react !== 'function') return;
 
     try {
-        // Support multiple reactions (e.g. "🎲⏳💀")
-        // Use Intl.Segmenter to properly split emojis (grapheme clusters)
-        const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-        const reactions = Array.from(segmenter.segment(reactionString)).map(s => s.segment);
+        let emojiToReact = reaction;
 
-        // Limit to first 3 to avoid spam if AI goes crazy
-        for (const reactionEmoji of reactions.slice(0, 3)) {
-            try {
-                await message.react(reactionEmoji);
-            } catch (e) {
-                console.error(`Failed to react with ${reactionEmoji}:`, e.message);
-            }
+        // Parse Custom Emojis of format <:name:id> or <a:name:id>
+        // Regex to capture the ID (last group of digits)
+        const customEmojiRegex = /<a?:.+:(\d+)>/;
+        const match = reaction.match(customEmojiRegex);
+        if (match) {
+            emojiToReact = match[1]; // Use the ID
+            console.log(`[Reactions] Extracted ID ${emojiToReact} from ${reaction}`);
         }
-    } catch (e) {
-        console.error(`Failed to process reactions:`, e.message);
+
+        await message.react(emojiToReact);
+        console.log(`[Reactions] Reacted with ${emojiToReact} to ${message.id}`);
+    } catch (error) {
+        console.error(`Failed to react with ${reaction}: ${error.message}`);
     }
 }
 

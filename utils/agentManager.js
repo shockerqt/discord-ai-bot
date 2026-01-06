@@ -23,7 +23,7 @@ const DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_
  * Get Lumi's full system message (base instructions + personality + dynamic context)
  * @param {Object} context - Optional context { client, channel, guild }
  */
-export function getLumiSystemMessage(context = {}) {
+export async function getLumiSystemMessage(context = {}) {
     let instructions = BASE_INSTRUCTIONS;
     const personality = getPersonality();
 
@@ -38,6 +38,15 @@ export function getLumiSystemMessage(context = {}) {
 
     // 1. App Emojis
     if (context.client && context.client.application) {
+        // App emojis are usually global, but let's check cache first
+        if (context.client.application.emojis.cache.size === 0) {
+            try {
+                console.log('[SystemPrompt] Fetching App Emojis...');
+                await context.client.application.emojis.fetch();
+            } catch (e) {
+                console.error('[SystemPrompt] Failed to fetch app emojis:', e);
+            }
+        }
         const appEmojis = context.client.application.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`);
         allEmojis.push(...appEmojis);
         console.log(`[SystemPrompt] App emojis found: ${appEmojis.length}`);
@@ -47,6 +56,17 @@ export function getLumiSystemMessage(context = {}) {
     if (context.guild || (context.channel && context.channel.guild)) {
         const guild = context.guild || context.channel.guild;
         console.log(`[SystemPrompt] Injecting emojis for guild: ${guild.name} (${guild.id})`);
+
+        // FORCE FETCH IF CACHE EMPTY
+        if (guild.emojis.cache.size === 0) {
+            try {
+                console.log('[SystemPrompt] Guild emoji cache empty. Fetching...');
+                await guild.emojis.fetch();
+                console.log(`[SystemPrompt] Fetched ${guild.emojis.cache.size} emojis.`);
+            } catch (e) {
+                console.error('[SystemPrompt] Failed to fetch guild emojis:', e);
+            }
+        }
 
         const guildEmojis = guild.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`);
         allEmojis.push(...guildEmojis);
