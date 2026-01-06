@@ -1,17 +1,17 @@
 /**
  * Message Handler - Maneja mensajes pasivos del bot
- * Pipeline: Decision Agent -> Lumi Agent -> Discord Response
+ * Pipeline: Save to History -> Decision Agent -> Lumi Agent -> Discord Response
  * Usando Chat Completions API
  */
 import { Mistral } from '@mistralai/mistralai';
 import { getLumiSystemMessage, getDecisionSystemMessage, getLumiParams } from '../utils/agentManager.js';
-import { getMessages, addUserMessage, addAssistantMessage } from '../utils/messageStore.js';
+import { getMessages, addUserMessages, addAssistantMessage } from '../utils/messageStore.js';
 import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
-const MODEL = process.env.MISTRAL_MODEL || 'mistral-medium-latest';
+const MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -38,13 +38,26 @@ function wrapText(text, width = 80) {
 }
 
 /**
- * Build message context from Discord messages
+ * Convert Discord messages to structured format for messageStore
  */
-function buildMessageContext(msgs) {
+function extractUserMessages(msgs) {
+    const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' });
+    return msgs.map(msg => ({
+        userId: msg.author.id,
+        userName: msg.member?.displayName || msg.author.username,
+        content: msg.content,
+        timestamp: now
+    }));
+}
+
+/**
+ * Build simple message content for display/debug
+ */
+function buildMessageContent(msgs) {
     const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' });
     return msgs.map(msg => {
         const author = msg.member?.displayName || msg.author.username;
-        return `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${author}: ${msg.content}`;
+        return `[${now}] ${author}: ${msg.content}`;
     }).join('\n');
 }
 
@@ -74,7 +87,7 @@ async function sendDebugAttachment(channel, label, content, replyTo = null) {
  * Call the decision agent to determine if Lumi should respond
  */
 async function callDecisionAgent(history, currentMessage) {
-    // Build context message for decision
+    // Build context for debug
     let contextContent = '';
     if (history.length > 0) {
         contextContent += '--- CONVERSATION HISTORY ---\n';
@@ -139,9 +152,6 @@ async function callLumiAgent(historyMessages) {
 // DEBUG HANDLERS
 // ============================================================================
 
-/**
- * Handle debug output based on mode
- */
 async function handleDebugOutput(debugMode, channel, lastMessage, contentStr) {
     if (debugMode === 'full') {
         await sendDebugOutput(channel, 'Chat Completions API', contentStr);
@@ -160,7 +170,7 @@ async function handleDebugOutput(debugMode, channel, lastMessage, contentStr) {
 
 /**
  * Main entry point for passive message handling
- * Pipeline: Decision -> Lumi -> Response
+ * Pipeline: Save to History -> Decision -> Lumi -> Response
  */
 export async function handlePassiveMessage(messages) {
     // Normalize to array
@@ -171,10 +181,14 @@ export async function handlePassiveMessage(messages) {
     const contextId = lastMessage.channel.id;
     const debugMode = getDebugMode(contextId);
 
-    // Build message context
-    const messageContent = buildMessageContext(msgs);
+    // ========== STEP 1: Save messages to history (ALWAYS) ==========
+    const userMsgs = extractUserMessages(msgs);
+    addUserMessages(contextId, userMsgs);
 
-    // ========== STEP 1: Decision Agent ==========
+    // Build display content
+    const messageContent = buildMessageContent(msgs);
+
+    // ========== STEP 2: Get history and call Decision Agent ==========
     console.log("--- DECISION AGENT ---");
     const history = getMessages(contextId);
     const decision = await callDecisionAgent(history, messageContent);
@@ -196,24 +210,20 @@ REASON: ${decision.reason}`;
     }
 
     if (!decision.shouldRespond) {
-        console.log("[Decision] Ignoring message.");
+        console.log("[Decision] Ignoring message (already saved to history).");
         return;
     }
 
-    // ========== STEP 2: Add to History ==========
-    addUserMessage(contextId, messageContent);
-    const updatedHistory = getMessages(contextId);
-
-    if (debugMode === 'full') {
-        const historyDebug = updatedHistory.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
-        await sendDebugAttachment(lastMessage.channel, `DEBUG INPUT (${updatedHistory.length} msgs)`, historyDebug);
-    }
-
-    // ========== STEP 3: Lumi Agent ==========
+    // ========== STEP 3: Call Lumi Agent ==========
     console.log("--- LUMI AGENT ---");
 
+    if (debugMode === 'full') {
+        const historyDebug = history.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
+        await sendDebugAttachment(lastMessage.channel, `DEBUG INPUT (${history.length} msgs)`, historyDebug);
+    }
+
     try {
-        const rawResponse = await callLumiAgent(updatedHistory);
+        const rawResponse = await callLumiAgent(history);
 
         if (!rawResponse) {
             console.log("[Lumi] Empty response received.");
@@ -227,7 +237,7 @@ REASON: ${decision.reason}`;
         const parsed = parseAIResponse(rawResponse);
         console.log("--- PARSED ---", parsed);
 
-        // ========== STEP 5: Save to History ==========
+        // ========== STEP 5: Save assistant response to History ==========
         if (parsed.send_text && parsed.text_content) {
             addAssistantMessage(contextId, parsed.text_content);
         }
