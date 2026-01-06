@@ -19,6 +19,10 @@ const DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_
 /**
  * Get Lumi's full system message (base instructions + personality)
  */
+// State tracking to prevent infinite fetching for servers with 0 emojis
+let hasFetchedAppEmojis = false;
+const fetchedGuilds = new Set();
+
 /**
  * Get Lumi's full system message (base instructions + personality + dynamic context)
  * @param {Object} context - Optional context { client, channel, guild }
@@ -32,19 +36,20 @@ export async function getLumiSystemMessage(context = {}) {
     }
 
     // Dynamic Emoji Injection
-    // Dynamic Emoji Injection
     // Collect from Guild AND Application
     const allEmojis = [];
 
     // 1. App Emojis
     if (context.client && context.client.application) {
-        // App emojis are usually global, but let's check cache first
-        if (context.client.application.emojis.cache.size === 0) {
+        // Fetch only if cache empty AND haven't fetched yet
+        if (context.client.application.emojis.cache.size === 0 && !hasFetchedAppEmojis) {
             try {
                 console.log('[SystemPrompt] Fetching App Emojis...');
                 await context.client.application.emojis.fetch();
             } catch (e) {
                 console.error('[SystemPrompt] Failed to fetch app emojis:', e);
+            } finally {
+                hasFetchedAppEmojis = true;
             }
         }
         const appEmojis = context.client.application.emojis.cache.map(e => `:${e.name}: (<${e.animated ? 'a' : ''}:${e.name}:${e.id}>)`);
@@ -57,14 +62,16 @@ export async function getLumiSystemMessage(context = {}) {
         const guild = context.guild || context.channel.guild;
         console.log(`[SystemPrompt] Injecting emojis for guild: ${guild.name} (${guild.id})`);
 
-        // FORCE FETCH IF CACHE EMPTY
-        if (guild.emojis.cache.size === 0) {
+        // FORCE FETCH IF CACHE EMPTY AND NOT FETCHED BEFORE
+        if (guild.emojis.cache.size === 0 && !fetchedGuilds.has(guild.id)) {
             try {
                 console.log('[SystemPrompt] Guild emoji cache empty. Fetching...');
                 await guild.emojis.fetch();
                 console.log(`[SystemPrompt] Fetched ${guild.emojis.cache.size} emojis.`);
             } catch (e) {
                 console.error('[SystemPrompt] Failed to fetch guild emojis:', e);
+            } finally {
+                fetchedGuilds.add(guild.id);
             }
         }
 
