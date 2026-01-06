@@ -9,12 +9,17 @@ const __dirname = dirname(__filename);
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 let cachedAgentId = null;
+let cachedDecisionAgentId = null;
 
 const AGENT_NAME = "Lumi";
 const AGENT_DESCRIPTION = "shitposting 24/7. si me pingueas me das cringe. no soy soporte técnico.";
 
+const DECISION_AGENT_NAME = "Lumi-Decision";
+const DECISION_AGENT_DESCRIPTION = "Cold decision-making agent that determines if Lumi should respond.";
+
 // Base instructions that are ALWAYS present (output format)
 const BASE_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/output_format.md'), 'utf-8');
+const DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_agent.md'), 'utf-8');
 
 export async function getOmniAgentId() {
     if (cachedAgentId) return cachedAgentId;
@@ -56,6 +61,50 @@ export async function getOmniAgentId() {
 
     } catch (error) {
         console.error("Error getting/creating agent:", error);
+        throw error;
+    }
+}
+
+/**
+ * Get or create the decision agent ID
+ * Uses DECISION_AGENT_ID env var if set, otherwise finds/creates agent
+ */
+export async function getDecisionAgentId() {
+    if (cachedDecisionAgentId) return cachedDecisionAgentId;
+
+    if (process.env.DECISION_AGENT_ID) {
+        cachedDecisionAgentId = process.env.DECISION_AGENT_ID;
+        console.log(`Using configured DECISION_AGENT_ID: ${cachedDecisionAgentId}`);
+        return cachedDecisionAgentId;
+    }
+
+    try {
+        const agentsList = await client.beta.agents.list();
+        const agents = Array.isArray(agentsList) ? agentsList : (agentsList.data || []);
+
+        const existingAgent = agents.find(a => a.name === DECISION_AGENT_NAME);
+
+        if (existingAgent) {
+            console.log(`Found existing decision agent: ${existingAgent.id}`);
+            cachedDecisionAgentId = existingAgent.id;
+            return existingAgent.id;
+        }
+
+        console.log(`Creating new decision agent: ${DECISION_AGENT_NAME}...`);
+        const newAgent = await client.beta.agents.create({
+            model: "mistral-large-latest",
+            name: DECISION_AGENT_NAME,
+            description: DECISION_AGENT_DESCRIPTION,
+            instructions: DECISION_INSTRUCTIONS,
+            temperature: 0.1, // Low temperature for consistent decisions
+        });
+
+        console.log(`Created new decision agent: ${newAgent.id}`);
+        cachedDecisionAgentId = newAgent.id;
+        return newAgent.id;
+
+    } catch (error) {
+        console.error("Error getting/creating decision agent:", error);
         throw error;
     }
 }

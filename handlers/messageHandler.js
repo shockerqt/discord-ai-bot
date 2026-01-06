@@ -1,18 +1,52 @@
 /**
  * Message Handler - Maneja mensajes pasivos del bot
- * Procesa mensajes del Gateway de Discord (no slash commands)
+ * Usa cadena de agentes: Decision Agent -> Lumi
  */
 import { Mistral } from '@mistralai/mistralai';
 import { getConversationId, setConversationId } from '../utils/conversationStore.js';
-import { getOmniAgentId } from '../utils/agentManager.js';
+import { getOmniAgentId, getDecisionAgentId } from '../utils/agentManager.js';
 import { debugChannels } from '../commands/debug.js';
 
 // Importar módulos del handler
-import { determineMode } from './message/modeHandler.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
+
+/**
+ * Llama al agente de decisión para determinar si Lumi debe responder
+ * @param {string} messageContent - Contenido del mensaje a evaluar
+ * @returns {Promise<{shouldRespond: boolean, reason: string}>}
+ */
+async function callDecisionAgent(messageContent) {
+    try {
+        const decisionAgentId = await getDecisionAgentId();
+
+        const response = await client.beta.agents.complete({
+            agentId: decisionAgentId,
+            messages: [{ role: 'user', content: messageContent }]
+        });
+
+        const content = response.choices?.[0]?.message?.content || '';
+
+        // Parse decision
+        const decisionMatch = content.match(/<DECISION>(.*?)<\/DECISION>/i);
+        const reasonMatch = content.match(/<REASON>(.*?)<\/REASON>/i);
+
+        const decision = decisionMatch ? decisionMatch[1].trim().toUpperCase() : 'IGNORAR';
+        const reason = reasonMatch ? reasonMatch[1].trim() : 'Sin razón';
+
+        return {
+            shouldRespond: decision === 'RESPONDER',
+            reason: reason,
+            rawResponse: content
+        };
+    } catch (error) {
+        console.error("Error calling decision agent:", error);
+        // En caso de error, ignorar por seguridad
+        return { shouldRespond: false, reason: 'Error en agente de decisión', rawResponse: '' };
+    }
+}
 
 /**
  * Maneja mensajes pasivos del chat
@@ -25,39 +59,52 @@ export async function handlePassiveMessage(messages) {
 
     const lastMessage = msgs[msgs.length - 1];
     const contextId = lastMessage.channel.id;
-
-    // Check if ANY message in the batch mentions the bot
-    const botUser = lastMessage.client.user;
-    const isMentioned = msgs.some(m =>
-        m.mentions.users.has(botUser.id) ||
-        /\blumi\b/i.test(m.content)
-    );
-
-    // Determinar modo usando el módulo
-    const { forcedInstruction, debugRngInfo } = determineMode({ contextId, isMentioned });
+    const debugMode = debugChannels.get(contextId);
 
     // Construct Context from Batch
     const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' });
-    let fullContent = "--- CURRENT MESSAGES ---\n";
+    let messageContext = "--- CURRENT MESSAGES ---\n";
 
     for (const msg of msgs) {
         const authorName = msg.member ? msg.member.displayName : msg.author.username;
-        fullContent += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${authorName}: ${msg.content}\n`;
+        messageContext += `[${now}] (ID: ${msg.id}) (UID: ${msg.author.id}) ${authorName}: ${msg.content}\n`;
     }
 
-    // Append mode instruction
-    fullContent += forcedInstruction;
+    // 1. Call Decision Agent
+    console.log("--- CALLING DECISION AGENT ---");
+    const decision = await callDecisionAgent(messageContext);
+    console.log(`Decision: ${decision.shouldRespond ? 'RESPONDER' : 'IGNORAR'} - ${decision.reason}`);
 
-    // Log Prompt
-    console.log("--- PROMPT SENT TO AGENT ---");
-    console.log(fullContent);
-    console.log("----------------------------");
+    // Debug: Show decision
+    if (debugMode === 'full') {
+        const decisionContent = `DECISION: ${decision.shouldRespond ? 'RESPONDER' : 'IGNORAR'}\nREASON: ${decision.reason}\n\n--- RAW ---\n${decision.rawResponse}`;
+        const buffer = Buffer.from('\uFEFF' + decisionContent, 'utf-8');
+        try {
+            await lastMessage.channel.send({
+                content: `**[🧠 DECISION AGENT]**`,
+                files: [{
+                    attachment: buffer,
+                    name: `decision-${Date.now()}.txt`
+                }],
+                reply: { messageReference: lastMessage.id }
+            });
+        } catch (err) {
+            console.error("Failed to send decision debug:", err);
+        }
+    }
+
+    // 2. If decision is IGNORAR, stop here
+    if (!decision.shouldRespond) {
+        console.log("[Decision Agent] Ignoring message.");
+        return;
+    }
+
+    // 3. Call Lumi (main agent)
+    console.log("--- CALLING LUMI AGENT ---");
 
     // Debug: Echo Input to Chat (only in 'full' mode)
-    const debugMode = debugChannels.get(contextId);
     if (debugMode === 'full') {
-        const debugInputContent = `RNG: ${debugRngInfo}\n\n${fullContent}`;
-        const buffer = Buffer.from('\uFEFF' + debugInputContent, 'utf-8');
+        const buffer = Buffer.from('\uFEFF' + messageContext, 'utf-8');
         try {
             await lastMessage.channel.send({
                 content: `**[DEBUG INPUT]**`,
@@ -80,7 +127,7 @@ export async function handlePassiveMessage(messages) {
             const agentId = await getOmniAgentId();
             response = await client.beta.conversations.start({
                 agentId: agentId,
-                inputs: [{ role: 'user', content: fullContent }]
+                inputs: [{ role: 'user', content: messageContext }]
             });
 
             if (response && response.conversationId) {
@@ -91,7 +138,7 @@ export async function handlePassiveMessage(messages) {
             response = await client.beta.conversations.append({
                 conversationId: conversationId,
                 conversationAppendRequest: {
-                    inputs: [{ role: 'user', content: fullContent }]
+                    inputs: [{ role: 'user', content: messageContext }]
                 }
             });
         }
@@ -122,7 +169,7 @@ export async function handlePassiveMessage(messages) {
 
         // Debug Mode Output
         if (debugMode === 'full') {
-            await sendDebugOutput(lastMessage.channel, debugRngInfo, contentStr);
+            await sendDebugOutput(lastMessage.channel, 'Decision Agent', contentStr);
         } else if (debugMode === 'thoughts') {
             // Extract only the THOUGHT section
             const thoughtMatch = contentStr.match(/<THOUGHT>([\s\S]*?)<\/THOUGHT>/i);
