@@ -1,19 +1,22 @@
 /**
- * Message Store - Almacena historial de mensajes en memoria por canal
- * Combina mensajes consecutivos del mismo usuario
+ * Message Store - Almacena historial de mensajes en memoria con estados
+ * Gestiona estados PENDING, WAITING, PROCESSED para el Decision Agent
  */
 
-// Map<channelId, Array<{role: 'user'|'assistant', content: string}>>
+// Tipos de estado
+export const MSG_STATUS = {
+    PENDING: 'PENDING',     // Recién llegado
+    WAITING: 'WAITING',     // Decision Agent dijo ESPERAR
+    PROCESSED: 'PROCESSED'  // Ya respondido o ignorado
+};
+
+// Map<channelId, Array<RawMessage>>
+// RawMessage: { id, role, content, author, timestamp, status }
 const channelMessages = new Map();
 
 // Track active channels
 const activeChannels = new Set();
-
-// Track last user ID per channel for combining messages
-const lastUserId = new Map();
-
-// Límite de mensajes en memoria por canal
-const MAX_MESSAGES = 50;
+const MAX_MESSAGES = 100; // Aumentado ligeramente ya que ahora no combinamos en almacenamiento
 
 /**
  * Get all active channel IDs
@@ -23,9 +26,9 @@ export function getActiveChannels() {
 }
 
 /**
- * Obtiene los mensajes de un canal
+ * Obtiene los mensajes raw de un canal
  */
-export function getMessages(channelId) {
+function getRawMessages(channelId) {
     if (!channelMessages.has(channelId)) {
         channelMessages.set(channelId, []);
     }
@@ -33,80 +36,116 @@ export function getMessages(channelId) {
 }
 
 /**
- * Agrega mensajes de usuario al historial
- * Combina mensajes consecutivos del mismo usuario en un solo mensaje
- * @param {string} channelId - ID del canal
- * @param {Array<{userId: string, userName: string, content: string, timestamp: string}>} userMessages - Mensajes a agregar
+ * Agrega mensajes de usuario al historial (PENDING por defecto)
+ * @param {string} channelId
+ * @param {Array<{userId: string, userName: string, content: string, timestamp: string, messageId: string}>} userMessages
  */
 export function addUserMessages(channelId, userMessages) {
     if (!userMessages || userMessages.length === 0) return;
 
     activeChannels.add(channelId);
-    const messages = getMessages(channelId);
-    const previousUserId = lastUserId.get(channelId);
+    const messages = getRawMessages(channelId);
 
     for (const msg of userMessages) {
-        const formattedLine = `[${msg.timestamp}] (MsgID:${msg.messageId}) ${msg.userName}: ${msg.content}`;
-
-        // Check if we can append to the last message (same user, last message is 'user')
-        const lastMsg = messages[messages.length - 1];
-        if (lastMsg && lastMsg.role === 'user' && previousUserId === msg.userId) {
-            // Append to existing user message
-            lastMsg.content += '\n' + formattedLine;
-        } else {
-            // Create new user message
-            messages.push({ role: 'user', content: formattedLine });
-
-            // Maintain limit
-            if (messages.length > MAX_MESSAGES) {
-                messages.shift();
-            }
-        }
-
-        lastUserId.set(channelId, msg.userId);
+        messages.push({
+            id: msg.messageId,
+            role: 'user',
+            content: msg.content,
+            author: msg.userName,
+            timestamp: msg.timestamp,
+            status: MSG_STATUS.PENDING
+        });
     }
-}
 
-/**
- * Legacy: Agrega un mensaje de usuario (sin combinar)
- */
-export function addUserMessage(channelId, content) {
-    activeChannels.add(channelId);
-    const messages = getMessages(channelId);
-    messages.push({ role: 'user', content });
-    lastUserId.set(channelId, null); // Reset user tracking
-
+    // Maintain limit
     if (messages.length > MAX_MESSAGES) {
-        messages.shift();
+        const removeCount = messages.length - MAX_MESSAGES;
+        messages.splice(0, removeCount);
     }
 }
 
 /**
- * Agrega un mensaje de asistente al historial
+ * Agrega mensaje de asistente (PROCESSED por defecto)
  */
 export function addAssistantMessage(channelId, content) {
     if (!content || content.trim() === '') return;
-
-    const messages = getMessages(channelId);
-    messages.push({ role: 'assistant', content });
-    lastUserId.set(channelId, null); // Reset - next user message won't combine
-
-    if (messages.length > MAX_MESSAGES) {
-        messages.shift();
-    }
+    const messages = getRawMessages(channelId);
+    messages.push({
+        id: `asst-${Date.now()}`,
+        role: 'assistant',
+        content: content,
+        author: 'Lumi',
+        timestamp: new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' }),
+        status: MSG_STATUS.PROCESSED
+    });
 }
 
 /**
- * Limpia el historial de un canal
+ * Obtiene historial formateado para Mistral API
+ * Combina mensajes consecutivos del mismo rol/autor para ahorrar tokens y dar contexto limpio
+ */
+export function getFormattedHistory(channelId) {
+    const raw = getRawMessages(channelId);
+    if (!raw.length) return [];
+
+    const history = [];
+    let currentMsg = null;
+
+    for (const msg of raw) {
+        if (msg.role === 'user') {
+            const line = `[${msg.timestamp}] (MsgID:${msg.id}) ${msg.author}: ${msg.content}`;
+
+            // Combinar con anterior si es usuario
+            if (currentMsg && currentMsg.role === 'user') {
+                currentMsg.content += '\n' + line;
+            } else {
+                currentMsg = { role: 'user', content: line };
+                history.push(currentMsg);
+            }
+        } else {
+            // Assistant message
+            if (currentMsg && currentMsg.role === 'user') currentMsg = null; // Break user block
+            history.push({ role: 'assistant', content: msg.content });
+        }
+    }
+    return history;
+}
+
+/**
+ * Obtiene mensajes no procesados (PENDING o WAITING) para el Decision Agent
+ */
+export function getUnprocessedMessages(channelId) {
+    const messages = getRawMessages(channelId);
+    return messages.filter(m => m.role === 'user' && m.status !== MSG_STATUS.PROCESSED);
+}
+
+/**
+ * Actualiza el estado de mensajes específicos
+ */
+export function updateMessageStatus(channelId, messageIds, newStatus) {
+    const messages = getRawMessages(channelId);
+    const idsSet = new Set(messageIds);
+    let count = 0;
+
+    for (const msg of messages) {
+        if (idsSet.has(msg.id)) {
+            msg.status = newStatus;
+            count++;
+        }
+    }
+    return count;
+}
+
+/**
+ * Limpia historial
  */
 export function clearMessages(channelId) {
     channelMessages.set(channelId, []);
-    lastUserId.delete(channelId);
 }
 
 /**
- * Obtiene el número de mensajes en el historial de un canal
+ * Count messages
  */
 export function getMessageCount(channelId) {
-    return getMessages(channelId).length;
+    return getRawMessages(channelId).length;
 }

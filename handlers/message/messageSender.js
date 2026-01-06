@@ -31,6 +31,7 @@ export async function sendTextMessage(channel, output) {
  */
 export async function sendReactions(message, reactionString) {
     if (!reactionString) return;
+    if (!message || typeof message.react !== 'function') return;
 
     try {
         // Support multiple reactions (e.g. "🎲⏳💀")
