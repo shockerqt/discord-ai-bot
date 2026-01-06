@@ -91,15 +91,12 @@ export async function getLumiSystemMessage(context = {}) {
     const uniqueEmojiList = [...new Set(allEmojis)].slice(0, 100);
 
     if (uniqueEmojiList.length > 0) {
-        instructions += `\n\n## EMOJIS PERSONALIZADOS (PRIORIDAD ALTA)
-Tienes acceso a los siguientes emojis del servidor. ÚSALOS FRECUENTEMENTE para dar personalidad.
-REGLAS:
-1. Copia EXACTAMENTE el código completo (incluyendo los corchetes <>). 
-   Ejemplo: si la lista dice "<:pepe:123>", escribe "<:pepe:123>" tal cual.
-2. Úsalos dentro de <TEXT_CONTENT> (para hablar) y en <REACTION> (para reaccionar).
-3. PREFIÉRELOS sobre los emojis normales (ej: usa un emoji de la lista envés de 😀).
+        instructions += `\n\n## EMOJIS DISPONIBLES
+Puedes usar tanto emojis estándar (Unicode) como los siguientes emojis personalizados del servidor.
+PREFERENCIA: Intenta usar los emojis personalizados cuando encajen, ya que dan más carácter y personalidad al mensaje.
+REGLA DE FORMATO: Para los personalizados, debes copiar EXACTAMENTE el código completo (ej: <:pepe:123>).
 
-LISTA DE EMOJIS:
+LISTA DE EMOJIS PERSONALIZADOS:
 ${uniqueEmojiList.join(' ')}`;
     } else {
         console.log('[SystemPrompt] No emojis (guild or app) available to inject.');
