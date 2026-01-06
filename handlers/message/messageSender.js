@@ -10,6 +10,7 @@
  */
 export async function sendTextMessage(channel, output) {
     if (!output.send_text || !output.text_content) return;
+    if (output.text_content.trim() === 'NULL') return;
 
     const msgOptions = { content: output.text_content };
     if (output.reply_to) {
@@ -34,12 +35,12 @@ export async function sendReactions(message, reactionString) {
     if (!message || typeof message.react !== 'function') return;
 
     try {
-        let emojiToReact = reaction;
+        let emojiToReact = reactionString;
 
         // Parse Custom Emojis of format <:name:id> or <a:name:id>
         // Regex to capture the ID (last group of digits)
         const customEmojiRegex = /<a?:.+:(\d+)>/;
-        const match = reaction.match(customEmojiRegex);
+        const match = reactionString.match(customEmojiRegex);
         if (match) {
             emojiToReact = match[1]; // Use the ID
             console.log(`[Reactions] Extracted ID ${emojiToReact} from ${reaction}`);
