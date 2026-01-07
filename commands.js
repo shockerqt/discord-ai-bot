@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { InstallGlobalCommands } from './utils.js';
-import * as modelCommand from './commands/model.js';
 import * as resetCommand from './commands/reset.js';
 import * as memoryCommand from './commands/memory.js';
 import * as configureCommand from './commands/configure.js';
@@ -12,7 +11,6 @@ import * as historyCommand from './commands/history.js';
 
 // Aggregate all commands
 const ALL_COMMANDS = [
-  modelCommand.data,
   resetCommand.data,
   configureCommand.data,
   memoryCommand.MEMORY_COMMAND,

@@ -11,6 +11,7 @@ const CONFIG_PATH = join(__dirname, '../config.xml');
 
 // Default values
 const DEFAULT_CONFIG = {
+    model: 'mistral-small-latest',
     temperature: 0.7,
     presence_penalty: 0,
     frequency_penalty: 0,
@@ -25,6 +26,10 @@ let config = { ...DEFAULT_CONFIG };
  */
 function parseXmlConfig(xmlContent) {
     const parsed = {};
+
+    // Extract model
+    const modelMatch = xmlContent.match(/<model>([\s\S]*?)<\/model>/i);
+    if (modelMatch) parsed.model = modelMatch[1].trim();
 
     // Extract temperature
     const tempMatch = xmlContent.match(/<temperature>([\s\S]*?)<\/temperature>/i);
@@ -50,6 +55,7 @@ function parseXmlConfig(xmlContent) {
  */
 function generateXml(cfg) {
     return `<config>
+<model>${cfg.model}</model>
 <temperature>${cfg.temperature}</temperature>
 <presence_penalty>${cfg.presence_penalty}</presence_penalty>
 <frequency_penalty>${cfg.frequency_penalty}</frequency_penalty>
@@ -99,6 +105,11 @@ export function getFrequencyPenalty() { return config.frequency_penalty; }
 export function getPersonality() { return config.personality; }
 
 // Setters (auto-save)
+export function setModel(value) {
+    config.model = value;
+    saveConfig();
+}
+
 export function setTemperature(value) {
     config.temperature = parseFloat(value);
     saveConfig();

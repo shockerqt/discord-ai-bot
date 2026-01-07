@@ -8,7 +8,6 @@ import {
 // import { Client, GatewayIntentBits } from 'discord.js'; // Removed
 import { DiscordRequest } from './utils.js';
 import { client } from './discordClient.js'; // Imported
-import * as modelCommand from './commands/model.js';
 import * as resetCommand from './commands/reset.js';
 import * as memoryCommand from './commands/memory.js';
 import * as configureCommand from './commands/configure.js';
@@ -28,7 +27,6 @@ export { client }; // Re-export if needed, or just let modules import from disco
 
 // Command Registry
 const commands = {
-  [modelCommand.data.name]: modelCommand,
   [resetCommand.data.name]: resetCommand,
   [configureCommand.data.name]: configureCommand,
   [memoryCommand.MEMORY_COMMAND.name]: { execute: memoryCommand.memoryCommand },

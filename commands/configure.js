@@ -1,7 +1,7 @@
 import { InteractionResponseType } from 'discord-interactions';
 import {
     getConfig, getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty,
-    setPersonality, setTemperature, setPresencePenalty, setFrequencyPenalty
+    setPersonality, setTemperature, setPresencePenalty, setFrequencyPenalty, setModel
 } from '../utils/configStore.js';
 
 export const data = {
@@ -12,6 +12,26 @@ export const data = {
             name: 'show',
             description: 'Show current configuration',
             type: 1, // SUB_COMMAND
+        },
+        {
+            name: 'model',
+            description: 'Set the AI model to use',
+            type: 1, // SUB_COMMAND
+            options: [
+                {
+                    type: 3, // STRING
+                    name: 'name',
+                    description: 'Select Mistral Model',
+                    required: true,
+                    choices: [
+                        { name: 'Mistral Large', value: 'mistral-large-latest' },
+                        { name: 'Mistral Small', value: 'mistral-small-latest' },
+                        { name: 'Ministral 14B', value: 'ministral-14b-latest' },
+                        { name: 'Ministral 8B', value: 'ministral-8b-latest' },
+                        { name: 'Ministral 3B', value: 'ministral-3b-latest' }
+                    ]
+                }
+            ]
         },
         {
             name: 'personality',
@@ -114,7 +134,7 @@ export async function execute(req, res) {
             if (!channel) throw new Error("Channel not found.");
 
             await channel.send({
-                content: `ℹ️ **Current Configuration**\n\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
+                content: `ℹ️ **Current Configuration**\n\n**Model:** \`${cfg.model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
                 files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
             });
 
@@ -129,6 +149,14 @@ export async function execute(req, res) {
                 method: 'PATCH',
                 body: { content: '🗑️ **Personality cleared!** Base instructions are preserved.' }
             });
+            return;
+        }
+
+        // MODEL
+        if (subCommand === 'model') {
+            const nameOption = subOptions.find(o => o.name === 'name');
+            setModel(nameOption.value);
+            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
             return;
         }
 
@@ -208,7 +236,7 @@ async function sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequ
     if (!channel) throw new Error("Channel not found.");
 
     await channel.send({
-        content: `✅ **Configuration Updated!**\n\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
+        content: `✅ **Configuration Updated!**\n\n**Model:** \`${cfg.model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
         files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
     });
 

@@ -16,9 +16,10 @@ import {
 import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
+import { getConfig } from '../utils/configStore.js';
 
 const aiProvider = ChatProviderFactory.createProvider();
-const MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
+const DECISION_MODEL = 'ministral-14b-latest';
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -96,7 +97,7 @@ async function handleDebugOutput(debugMode, channel, lastMessage, contentStr, me
 /**
  * Call Decision Agent with binary control (RESPONDER / IGNORAR)
  */
-async function callDecisionAgent(history, unprocessedMessages) {
+async function callDecisionAgent(history, unprocessedMessages, model = DECISION_MODEL) {
     // Build context
     let contextContent = '';
 
@@ -118,7 +119,7 @@ async function callDecisionAgent(history, unprocessedMessages) {
             { role: 'system', content: getDecisionSystemMessage() },
             { role: 'user', content: contextContent }
         ], {
-            model: MODEL,
+            model: model,
             temperature: 0.1
         });
 
@@ -195,9 +196,10 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
         iterations++;
 
         try {
-            console.log(`[LumiAgent] Iteration ${iterations}. Sending to AI...`);
+            const currentModel = context.model || 'mistral-small-latest';
+            console.log(`[LumiAgent] Iteration ${iterations}. Sending to AI using model: ${currentModel}...`);
             const response = await aiProvider.complete(messages, {
-                model: MODEL,
+                model: currentModel,
                 tools: tools,
                 toolChoice: 'auto',
                 temperature: params.temperature,
@@ -306,7 +308,8 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
     const promptContext = {
         channel: channel,
         guild: channel.guild,
-        client: channel.client
+        client: channel.client,
+        model: getConfig().model
     };
 
     console.log(`[Trigger] Lumi response for ${contextId}. Targets: ${targetIds.join(',')}`);
