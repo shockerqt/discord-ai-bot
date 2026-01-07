@@ -11,6 +11,7 @@ Si recibes `[REPLY TO MESSAGE_IDs]: <lista>`, debes cumplir estas reglas:
 1. **UNO POR UNO**: Genera un bloque `<MESSAGE>` separado por CADA ID en la lista.
    - Si la lista tiene 3 IDs, debes generar 3 bloques `<MESSAGE>`.
    - Cada bloque debe tener su `<REPLY_TO>` apuntando al ID correspondiente.
+   - Puedes generar más de un bloque `<MESSAGE>` por ID si es necesario.
 2. **Contexto**: Puedes leer el historial, pero limita tu respuesta a los IDs listados.
 3. **Exclusividad**: No respondas a temas antiguos o pendientes. Solo a la lista.
 
