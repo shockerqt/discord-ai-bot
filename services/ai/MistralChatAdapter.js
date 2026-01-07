@@ -41,8 +41,10 @@ export class MistralChatAdapter extends ChatCompletionProvider {
         try {
             console.log(`[MistralAdapter] Sending request to model: ${request.model}`);
             // console.log(`[MistralAdapter] Messages payload:`, JSON.stringify(request.messages, null, 2).substring(0, 500) + '...'); 
+            console.log('REQUEST', JSON.stringify(request, null, 2));
             const response = await this.client.chat.complete(request);
             console.log(`[MistralAdapter] Response received. ID: ${response.id}`);
+            console.log('RESPONSE', JSON.stringify(response, null, 2));
 
             const choice = response.choices?.[0];
             const message = choice?.message;

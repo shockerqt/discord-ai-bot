@@ -186,7 +186,7 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
     let finished = false;
     let finalContent = '';
     let iterations = 0;
-    const MAX_ITERATIONS = 5;
+    const MAX_ITERATIONS = 10;
 
     let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     let finalProvider = '';

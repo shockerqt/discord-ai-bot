@@ -104,6 +104,7 @@ export async function getLumiSystemMessage(context = {}) {
 Puedes usar tanto emojis estándar (Unicode) como los siguientes emojis personalizados.
 PREFERENCIA: Intenta usar los emojis personalizados cuando encajen.
 NOTA: Los emojis a veces tienen una descripcion entre paréntesis que indica su origen. Por ejemplo, "sappy_love (foca)" significa que es un emoji de foca.
+Puedes poner los emojis en medio del mensaje o puedes mandarlos en un mensaje nuevo si quieres que destaquen.
 
 REGLA DE FORMATO: Solo escribe el nombre del emoji entre dos puntos. 
 Ejemplo: si en la lista dice "523423pepe", tú escribe :523423pepe:. Si dice "23912sappy_love (foca)", escribe :23912sappy_love:.
