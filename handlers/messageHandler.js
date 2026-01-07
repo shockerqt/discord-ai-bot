@@ -62,7 +62,8 @@ export function extractUserMessages(msgs) {
 
 
 async function sendDebugAttachment(channel, label, content, replyTo = null) {
-    const buffer = Buffer.from('\uFEFF' + content, 'utf-8');
+    const wrapped = wrapText(content, 100);
+    const buffer = Buffer.from('\uFEFF' + wrapped, 'utf-8');
     const options = {
         content: `**[${label}]**`,
         files: [{ attachment: buffer, name: `${label.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.txt` }]
@@ -323,7 +324,7 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
         await sendDebugAttachment(channel, `⚙️ LUMI SYSTEM PROMPT`, systemMsg);
 
         // Input History Attachment (No system prompt)
-        const historyDebug = history.map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
+        const historyDebug = history.slice().reverse().map(m => `[${m.role}]: ${m.content}`).join('\n\n---\n\n');
         await sendDebugAttachment(channel, `🤖 LUMI INPUT HISTORY`, historyDebug);
     }
 
@@ -337,6 +338,7 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
         if (debugMode === 'full' && trace) {
             const fullTrace = trace
                 .filter(m => m.role !== 'system') // Filter out system prompt
+                .slice().reverse()
                 .map(m => {
                     if (m.role === 'tool') {
                         return `[TOOL RESULT] (${m.name}): ${m.content}`;
@@ -382,8 +384,7 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
             }
         }
 
-        const wrappedContent = wrapText(rawResponse, 100);
-        await handleDebugOutput(debugMode, channel, lastMessage, wrappedContent, { usage, provider, model });
+        await handleDebugOutput(debugMode, channel, lastMessage, rawResponse, { usage, provider, model });
 
     } catch (error) {
         console.error("Lumi error:", error);

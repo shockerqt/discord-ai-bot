@@ -139,10 +139,28 @@ export async function sendReactions(message, reactionString) {
  * @param {string} contentStr - Contenido raw XML
  * @returns {Promise<void>}
  */
+function wrapText(text, width = 100) {
+    if (!text) return "";
+    return text.split('\n').map(line => {
+        if (line.length <= width) return line;
+        const words = line.split(' ');
+        let result = '', currentLine = words[0];
+        for (let i = 1; i < words.length; i++) {
+            if ((currentLine + ' ' + words[i]).length <= width) {
+                currentLine += ' ' + words[i];
+            } else {
+                result += currentLine + '\n';
+                currentLine = words[i];
+            }
+        }
+        return result + currentLine;
+    }).join('\n');
+}
+
 export async function sendDebugOutput(channel, contentStr, extraInfo = '') {
     const debugContent = `
 --- COMPLETE RAW XML ---
-${contentStr}
+${wrapText(contentStr)}
 `;
     const buffer = Buffer.from('\uFEFF' + debugContent, 'utf-8');
     try {

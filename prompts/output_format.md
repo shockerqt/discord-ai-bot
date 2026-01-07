@@ -26,7 +26,6 @@ Para cada ID incluido en la lista `[REPLY TO MESSAGE_IDs]`, realiza el siguiente
 ## 4. FORMATO DE SALIDA (TAGS OBLIGATORIO) -- NO USES JSON
 Responde SIEMPRE usando estos tags exactos.
 
-```xml
 <THOUGHT>
 Pensamiento específico para el ID1...
 </THOUGHT>
@@ -36,4 +35,43 @@ Pensamiento específico para el ID1...
 <REACTION>ID o EMOJI</REACTION>
 <ATTACHMENT>URL</ATTACHMENT>
 </MESSAGE>
-```
+
+## 5. EJEMPLOS
+
+<THOUGHT>
+Pensamiento específico para el ID1...
+</THOUGHT>
+<MESSAGE>
+<TEXT_CONTENT>Respuesta 1</TEXT_CONTENT>
+<REPLY_TO>ID1</REPLY_TO>
+<REACTION>ID o EMOJI</REACTION>
+<ATTACHMENT>URL</ATTACHMENT>
+</MESSAGE>
+
+<THOUGHT>
+Pensamiento específico para el ID2 (Solo emoji)
+</THOUGHT>
+<MESSAGE>
+<TEXT_CONTENT></TEXT_CONTENT>
+<REPLY_TO>ID2</REPLY_TO>
+<REACTION>ID o EMOJI</REACTION>
+<ATTACHMENT></ATTACHMENT>
+</MESSAGE>
+
+<THOUGHT>
+Pensamiento específico para el ID3 (Ignorar)
+</THOUGHT>
+
+<THOUGHT>
+Pensamiento específico para el ID4 (Múltiples respuestas)
+</THOUGHT>
+<MESSAGE>
+<TEXT_CONTENT>Respuesta 1</TEXT_CONTENT>
+<REPLY_TO>ID4</REPLY_TO>
+<REACTION>ID o EMOJI</REACTION>
+<ATTACHMENT>URL</ATTACHMENT>
+</MESSAGE>
+<MESSAGE>
+<TEXT_CONTENT>Respuesta 2</TEXT_CONTENT>
+<ATTACHMENT>URL</ATTACHMENT>
+</MESSAGE>
