@@ -35,12 +35,14 @@ export function parseAIResponse(rawContent) {
         const textContent = extractTag(msgBlock, 'TEXT_CONTENT');
         const replyToRaw = extractTag(msgBlock, 'REPLY_TO');
         const reactionRaw = extractTag(msgBlock, 'REACTION');
+        const attachmentRaw = extractTag(msgBlock, 'ATTACHMENT');
 
         messages.push({
             send_text: !!(textContent && textContent.trim().length > 0),
             text_content: textContent || "",
             reply_to: (replyToRaw && replyToRaw.toUpperCase() !== 'NULL') ? replyToRaw : null,
-            reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null
+            reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null,
+            attachment: (attachmentRaw && attachmentRaw.toUpperCase() !== 'NULL') ? attachmentRaw : null
         });
     }
 
@@ -49,13 +51,15 @@ export function parseAIResponse(rawContent) {
         const textContent = extractTag(contentStr, 'TEXT_CONTENT');
         const replyToRaw = extractTag(contentStr, 'REPLY_TO');
         const reactionRaw = extractTag(contentStr, 'REACTION');
+        const attachmentRaw = extractTag(contentStr, 'ATTACHMENT');
 
-        if (textContent || reactionRaw) {
+        if (textContent || reactionRaw || attachmentRaw) {
             messages.push({
                 send_text: !!(textContent && textContent.trim().length > 0),
                 text_content: textContent || "",
                 reply_to: (replyToRaw && replyToRaw.toUpperCase() !== 'NULL') ? replyToRaw : null,
-                reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null
+                reaction: (reactionRaw && reactionRaw.toUpperCase() !== 'NULL') ? reactionRaw : null,
+                attachment: (attachmentRaw && attachmentRaw.toUpperCase() !== 'NULL') ? attachmentRaw : null
             });
         }
     }

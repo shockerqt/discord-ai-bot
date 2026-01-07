@@ -58,10 +58,14 @@ function replaceEmojiShortcodes(text, guild, client) {
  * @returns {Promise<void>}
  */
 export async function sendTextMessage(channel, output) {
-    if (!output.send_text || !output.text_content) return;
-    if (output.text_content.trim() === 'NULL') return;
+    if (!output.send_text || !output.text_content) {
+        // Allow empty text if attachment is present
+        if (!output.attachment) return;
+        // If attachment present, but no text, ensure contentToSend is empty string, not skipped
+    }
+    if (output.text_content && output.text_content.trim() === 'NULL' && !output.attachment) return;
 
-    let contentToSend = replaceEmojiShortcodes(output.text_content, channel.guild, channel.client);
+    let contentToSend = replaceEmojiShortcodes(output.text_content || '', channel.guild, channel.client);
 
     // Safety truncate if expansion pushed it over 2000 (unlikely but possible)
     if (contentToSend.length > 2000) {
@@ -69,6 +73,12 @@ export async function sendTextMessage(channel, output) {
     }
 
     const msgOptions = { content: contentToSend };
+
+    // Attachments
+    if (output.attachment && output.attachment.startsWith('http')) {
+        msgOptions.files = [output.attachment];
+    }
+
     if (output.reply_to) {
         // Validate reply_to is a valid ID (digits) logic elsewhere or verify here
         // If reply_to is "ID1" from prompt placeholder, it might be invalid, but usually parsed.

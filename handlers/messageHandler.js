@@ -382,7 +382,8 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
             }
         }
 
-        await handleDebugOutput(debugMode, channel, lastMessage, rawResponse, { usage, provider, model });
+        const wrappedContent = wrapText(rawResponse, 100);
+        await handleDebugOutput(debugMode, channel, lastMessage, wrappedContent, { usage, provider, model });
 
     } catch (error) {
         console.error("Lumi error:", error);
