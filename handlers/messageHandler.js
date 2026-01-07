@@ -2,7 +2,7 @@
  * Message Handler - Maneja mensajes pasivos del bot
  * Pipeline: Save -> Decision (Granular) -> Scheduler -> Lumi -> Response
  */
-import { Mistral } from '@mistralai/mistralai';
+import { ChatProviderFactory } from '../services/ai/ChatProviderFactory.js';
 import { getLumiSystemMessage, getDecisionSystemMessage, getLumiParams } from '../utils/agentManager.js';
 import {
     getFormattedHistory,
@@ -17,7 +17,7 @@ import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
 
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
+const aiProvider = ChatProviderFactory.createProvider();
 const MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
 
 // ============================================================================
@@ -70,9 +70,16 @@ async function sendDebugAttachment(channel, label, content, replyTo = null) {
     try { await channel.send(options); } catch (err) { console.error(`Failed to send ${label} debug:`, err); }
 }
 
-async function handleDebugOutput(debugMode, channel, lastMessage, contentStr) {
+async function handleDebugOutput(debugMode, channel, lastMessage, contentStr, metadata = {}) {
     if (debugMode === 'full') {
-        await sendDebugOutput(channel, contentStr);
+        console.log('[Debug] Metadata received:', JSON.stringify(metadata, null, 2));
+        let metaInfo = '';
+        if (metadata.usage) {
+            metaInfo += `\n**Meta Info**\n`;
+            metaInfo += `Provider: \`${metadata.provider || 'Unknown'}\` | Model: \`${metadata.model || 'Unknown'}\`\n`;
+            metaInfo += `Tokens: Prompt: ${metadata.usage.promptTokens}, Completion: ${metadata.usage.completionTokens}, Total: ${metadata.usage.totalTokens}`;
+        }
+        await sendDebugOutput(channel, contentStr, metaInfo);
     } else if (debugMode === 'thoughts') {
         const thoughtMatch = contentStr.match(/<THOUGHT>([\s\S]*?)<\/THOUGHT>/i);
         if (thoughtMatch) {
@@ -107,16 +114,15 @@ async function callDecisionAgent(history, unprocessedMessages) {
     });
 
     try {
-        const response = await client.chat.complete({
+        const response = await aiProvider.complete([
+            { role: 'system', content: getDecisionSystemMessage() },
+            { role: 'user', content: contextContent }
+        ], {
             model: MODEL,
-            messages: [
-                { role: 'system', content: getDecisionSystemMessage() },
-                { role: 'user', content: contextContent }
-            ],
             temperature: 0.1
         });
 
-        const content = response.choices?.[0]?.message?.content || '';
+        const content = response.content || '';
 
         // Parse Decisions XML
         const decisions = [];
@@ -181,33 +187,53 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
     let iterations = 0;
     const MAX_ITERATIONS = 5;
 
+    let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    let finalProvider = '';
+    let finalModel = '';
+
     while (!finished && iterations < MAX_ITERATIONS) {
         iterations++;
 
         try {
-            const response = await client.chat.complete({
+            console.log(`[LumiAgent] Iteration ${iterations}. Sending to AI...`);
+            const response = await aiProvider.complete(messages, {
                 model: MODEL,
-                messages: messages,
                 tools: tools,
                 toolChoice: 'auto',
                 temperature: params.temperature,
-                presence_penalty: params.presence_penalty,
-                frequency_penalty: params.frequency_penalty
+                presencePenalty: params.presence_penalty,
+                frequencyPenalty: params.frequency_penalty
             });
 
-            const choice = response.choices?.[0];
-            const message = choice?.message;
+            const { content, toolCalls, usage, provider, model } = response;
+            console.log(`[LumiAgent] Response content length: ${content ? content.length : 0}, ToolCalls: ${toolCalls ? toolCalls.length : 0}`);
 
-            if (!message) break;
+            // Accumulate usage
+            if (usage) {
+                totalUsage.promptTokens += usage.promptTokens || 0;
+                totalUsage.completionTokens += usage.completionTokens || 0;
+                totalUsage.totalTokens += usage.totalTokens || 0;
+            }
+            finalProvider = provider || finalProvider;
+            finalModel = model || finalModel;
+
+            if (!content && (!toolCalls || toolCalls.length === 0)) {
+                console.warn('[LumiAgent] Received empty content and no tool calls. Breaking loop.');
+                break;
+            }
 
             // Add assistant message to history context
-            messages.push(message);
+            // Note: Adapter returns clean content/toolCalls. converting back to message object for history
+            const assistantMessage = { role: 'assistant', content: content };
+            if (toolCalls && toolCalls.length > 0) assistantMessage.toolCalls = toolCalls;
 
-            if (choice.finishReason === 'tool_calls' || message.toolCalls) {
+            messages.push(assistantMessage);
+
+            if (toolCalls && toolCalls.length > 0) {
                 // Handle Tool Calls
-                console.log(`[Tool] Processing ${message.toolCalls.length} tool calls...`);
+                console.log(`[Tool] Processing ${toolCalls.length} tool calls...`);
 
-                for (const toolCall of message.toolCalls) {
+                for (const toolCall of toolCalls) {
                     const funcName = toolCall.function.name;
                     const argsString = toolCall.function.arguments;
                     let args = {};
@@ -239,19 +265,30 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
                 // Loop continues to get next response from AI
             } else {
                 // Final response
-                finalContent = message.content;
+                finalContent = content;
                 finished = true;
             }
 
         } catch (error) {
             console.error("Error in Lumi Agent loop:", error);
             // If error occurs, return what we have or generic error
-            // If error occurs, return what we have or generic error
-            return { response: finalContent || '', trace: messages };
+            return {
+                response: finalContent || '',
+                trace: messages,
+                usage: totalUsage,
+                provider: finalProvider,
+                model: finalModel
+            };
         }
     }
 
-    return { response: finalContent || '', trace: messages };
+    return {
+        response: finalContent || '',
+        trace: messages,
+        usage: totalUsage,
+        provider: finalProvider,
+        model: finalModel
+    };
 }
 
 // ============================================================================
@@ -289,7 +326,9 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
 
     try {
         // Generate response
-        const { response: finalResponse, trace } = await callLumiAgent(history, targetIds, promptContext);
+        console.log(`[Trigger] Calling callLumiAgent...`);
+        const { response: finalResponse, trace, usage, provider, model } = await callLumiAgent(history, targetIds, promptContext);
+        console.log(`[Trigger] output received. Response length: ${finalResponse ? finalResponse.length : 0}`);
 
         // DEBUG: Full trace including tools
         if (debugMode === 'full' && trace) {
@@ -340,9 +379,7 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
             }
         }
 
-        await handleDebugOutput(debugMode, channel, lastMessage, rawResponse);
-        // await sendTextMessage(channel, parsed); // Removed single call
-        // await sendReactions(lastMessage, parsed.reaction); // Global Replaced by per-message
+        await handleDebugOutput(debugMode, channel, lastMessage, rawResponse, { usage, provider, model });
 
     } catch (error) {
         console.error("Lumi error:", error);

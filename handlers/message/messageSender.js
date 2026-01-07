@@ -129,7 +129,7 @@ export async function sendReactions(message, reactionString) {
  * @param {string} contentStr - Contenido raw XML
  * @returns {Promise<void>}
  */
-export async function sendDebugOutput(channel, contentStr) {
+export async function sendDebugOutput(channel, contentStr, extraInfo = '') {
     const debugContent = `
 --- COMPLETE RAW XML ---
 ${contentStr}
@@ -137,7 +137,7 @@ ${contentStr}
     const buffer = Buffer.from('\uFEFF' + debugContent, 'utf-8');
     try {
         await channel.send({
-            content: `**[DEBUG OUTPUT]**`,
+            content: `**[DEBUG OUTPUT]**\n${extraInfo}`,
             files: [{
                 attachment: buffer,
                 name: `debug-${Date.now()}.txt`
