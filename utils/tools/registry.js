@@ -4,12 +4,14 @@
  */
 import * as rngTool from './rng.js';
 import * as gifTool from './gif.js';
+import * as statusTool from './status.js';
 // import * as emojiTool from './emoji.js'; // Deprecated in favor of System Prompt Injection
 
 // Add new tools here
 const tools = {
     'rng_tool': rngTool,
-    'gif_tool': gifTool
+    'gif_tool': gifTool,
+    'status_tool': statusTool
 };
 
 /**
