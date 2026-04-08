@@ -1,6 +1,5 @@
-
-import { getVoiceConnection } from '@discordjs/voice';
 import { InteractionResponseType } from 'discord-interactions';
+import { voiceHandler } from '../handlers/voiceHandler.js';
 
 export const data = {
     name: 'leave',
@@ -11,10 +10,7 @@ export const data = {
 export async function execute(req, res) {
     const { guild_id } = req.body;
 
-    const connection = getVoiceConnection(guild_id);
-
-    if (connection) {
-        connection.destroy();
+    if (voiceHandler.leave(guild_id)) {
         return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: { content: '👋 Left the voice channel.' },
