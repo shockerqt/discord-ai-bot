@@ -330,7 +330,211 @@ The `.env` file is managed manually on the server and is never synced by CI.
 - The bot will not crash on individual message processing errors (handled in queue)
 
 ---
+npm run dev
+```
+
+Uses nodemon; watches `.js`, `.json`, `.md`, `.xml` files.
+
+### Register Slash Commands
+
+```bash
+npm run register
+```
+
+Run this after adding or modifying any command definition. Commands are registered globally.
+
+### Start Production Server
+
+```bash
+npm start
+```
+
+### Expose Interactions Endpoint (local dev)
+
+```bash
+npm run ngrok
+```
+
+Creates a public tunnel to `localhost:3000` for Discord to send interactions.
+
+---
+
+## Configuration System
+
+Configuration is persisted to `config.xml` via `utils/configStore.js`.
+
+**Configurable via `/configure` slash command:**
+
+| Setting | Default | Notes |
+|---------|---------|-------|
+| `model` | `mistral-small-latest` | Mistral model name |
+| `temperature` | `0.7` | Creativity (0.0–1.0) |
+| `presence_penalty` | `0` | Penalty for new topics (-2.0–2.0) |
+| `frequency_penalty` | `0` | Penalty for repetition (-2.0–2.0) |
+| `personality` | (none) | Appended to base system prompt |
+
+Config is loaded at startup and saved after every change. If `config.xml` is missing, defaults are used.
+
+---
+
+## Slash Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `/ping` | Health check — replies "Pong! 🏓" |
+| `/reset` | Clear conversation history for current channel |
+| `/memory view` | Show all active channels and message counts |
+| `/memory clear_all` | Wipe all channel histories |
+| `/configure show` | Display current config + personality as file attachment |
+| `/configure model <name>` | Switch Mistral model |
+| `/configure personality <text>` | Append or overwrite personality instructions |
+| `/configure creativity <0.0–1.0>` | Set temperature |
+| `/configure presence_penalty <value>` | Set presence penalty |
+| `/configure frequency_penalty <value>` | Set frequency penalty |
+| `/configure clear_personality` | Remove custom personality |
+| `/debug <mode>` | Set debug level: `off`, `thoughts`, `decisions`, `full` |
+| `/history` | Export conversation history as `.txt` file |
+| `/join` | Join the voice channel of the command author |
+| `/leave` | Disconnect from voice channel |
+
+---
+
+## Response Mode System
+
+When Lumi decides to respond (`modeHandler.js`), the mode affects how she responds:
+
+**Active Mode** (within 3 minutes of being mentioned):
+- 50% Silent (no response)
+- 30% Emote (reaction only)
+- 20% Text (full response)
+
+**Passive Mode** (not recently mentioned):
+- 85% Silent
+- 10% Emote
+- 5% Free (text response)
+
+The mode system creates natural, non-spammy behavior in group chats.
+
+---
+
+## Tool System
+
+Tools are registered in `utils/tools/registry.js` and follow Mistral's function-calling format.
+
+**Available tools:**
+
+| Tool | Description |
+|------|-------------|
+| `rng_tool` | Roll dice (ROLL) or pick from options (PICK) |
+| `gif_tool` | Search Tenor for a GIF by query |
+| `status_tool` | Change bot Discord presence (text, type, status) |
+
+**Adding a new tool:**
+1. Create `utils/tools/<name>.js` with `definition` (Mistral tool schema) and `execute(params)` function
+2. Import and register in `utils/tools/registry.js`
+
+The Lumi agent loops up to 10 iterations to support chained tool calls.
+
+---
+
+## AI Response Format
+
+Lumi's responses are XML inside markdown code blocks. The parser (`responseParser.js`) extracts:
+
+```xml
+<THOUGHT>Internal reasoning (not sent to Discord)</THOUGHT>
+<MESSAGE>
+  <TEXT_CONTENT>Message text</TEXT_CONTENT>
+  <REPLY_TO>DiscordMessageID</REPLY_TO>     <!-- optional -->
+  <REACTION>emoji_code</REACTION>           <!-- optional -->
+  <ATTACHMENT>URL</ATTACHMENT>              <!-- optional -->
+</MESSAGE>
+```
+
+Multiple `<MESSAGE>` blocks are supported per response. Each maps to one Discord message sent.
+
+---
+
+## Debug System
+
+Debug mode is set per-channel via `/debug` and falls back to `DEFAULT_DEBUG_MODE` env var.
+
+| Level | Output |
+|-------|--------|
+| `off` | No debug output |
+| `thoughts` | Shows `<THOUGHT>` blocks only |
+| `decisions` | Shows decision agent evaluation |
+| `full` | System prompt, full history, tool calls, complete XML |
+
+Debug output is sent as file attachments to avoid cluttering the channel.
+
+---
+
+## Message Store
+
+`utils/messageStore.js` tracks per-channel message history in memory:
+
+- Max **100 messages** per channel (oldest trimmed automatically)
+- Message states: `PENDING` → `WAITING` → `PROCESSED` / `GENERATING`
+- Consecutive same-role messages are merged before sending to AI (token efficiency)
+- Cleared on `/reset` or `/memory clear_all`
+
+---
+
+## Deployment
+
+Deployment is handled by `.github/workflows/deploy.yml` on push to `main`:
+
+1. Syncs files to `/opt/zavier-sama` on a self-hosted runner (excludes `.git`, `node_modules`, `.env`)
+2. Runs `npm ci --production`
+3. Registers slash commands via `npm run register`
+4. Restarts PM2 process named `zavier-sama` or `zavier-sama-app`
+
+The `.env` file is managed manually on the server and is never synced by CI.
+
+---
+
+## Key Conventions
+
+### Code Style
+- ES Modules throughout (`"type": "module"` in package.json) — use `import`/`export`, not `require`
+- No TypeScript — plain JavaScript
+- Functions are exported individually (named exports), not as default class instances
+- Async/await used for all async operations
+
+### Adding a Slash Command
+1. Create `commands/<name>.js` with `data` (interaction definition) and `execute(interaction)` function
+2. Import and add to the export in `commands.js`
+3. Add routing in `app.js` command handler
+4. Run `npm run register` to register with Discord
+
+### Modifying the AI Pipeline
+- System prompts live in `prompts/` as markdown files
+- `agentManager.js` loads and assembles the system prompt at call time (not cached)
+- Decision agent prompt: `prompts/decision_agent.md`
+- Response format prompt: `prompts/output_format.md`
+- Character personality: `LUMI_INSTRUCTIONS.md` (base) + configurable addition via `/configure personality`
+
+### State
+- All state is in-memory except `config.xml`
+- Restarting the bot clears all conversation history
+- There is no database
+
+### Error Handling
+- Tool call errors are caught per-iteration in the Lumi agent loop
+- The bot will not crash on individual message processing errors (handled in queue)
+
+---
 
 ## Node.js Version
 
 Requires **Node.js >= 18** (see `package.json` engines field).
+
+---
+
+## 📋 Project Backlog & Tasks
+
+The detailed task backlog has been extracted to a dedicated directory for better organization.
+Please refer to: **[`docs/backlog/README.md`](./docs/backlog/README.md)**
+
+*Current Priority:* **Iterating core Chat interactions.**

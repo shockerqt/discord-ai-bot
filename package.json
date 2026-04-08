@@ -12,12 +12,14 @@
     "start": "node app.js",
     "register": "node commands.js",
     "dev": "nodemon app.js",
-    "ngrok": "ngrok http 3000"
+    "ngrok": "node utils/start_ngrok.js"
   },
   "author": "Shay DeWael",
   "license": "MIT",
   "dependencies": {
+    "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.19.0",
+    "@google/genai": "^1.35.0",
     "@mistralai/mistralai": "^1.11.0",
     "@snazzah/davey": "^0.1.9",
     "discord-interactions": "^4.0.0",
