@@ -91,7 +91,6 @@ Durante el despliegue, el archivo `.env` se genera automáticamente. Para config
 - `TENOR_API_KEY` (Opcional, si usas `gif_tool`)
 
 **Repository Variables:**
-- `CHAT_PROVIDER` (Ej: `mistral` o `groq`)
 - `DEFAULT_DEBUG_MODE` (Ej: `full`, `thoughts`, `off`)
 - `PORT` (Ej: `3000`)
 

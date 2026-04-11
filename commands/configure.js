@@ -1,7 +1,7 @@
 import { InteractionResponseType } from 'discord-interactions';
 import {
-    getConfig, getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty,
-    setPersonality, setTemperature, setPresencePenalty, setFrequencyPenalty, setModel
+    getConfig, getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty, getProvider,
+    setPersonality, setTemperature, setPresencePenalty, setFrequencyPenalty, setModel, setProvider
 } from '../utils/configStore.js';
 
 export const data = {
@@ -21,13 +21,16 @@ export const data = {
                 {
                     type: 3, // STRING
                     name: 'name',
-                    description: 'Model name (e.g. llama-3.3-70b-versatile, mistral-small-latest)',
+                    description: 'Model name (provider:model)',
                     required: true,
                     choices: [
-                        { name: 'Llama 3.3 70B (Groq)', value: 'llama-3.3-70b-versatile' },
-                        { name: 'Llama 3.1 8B Instant (Groq)', value: 'llama-3.1-8b-instant' },
-                        { name: 'Mixtral 8x7B (Groq)', value: 'mixtral-8x7b-32768' },
-                        { name: 'Gemma 2 9B (Groq)', value: 'gemma2-9b-it' }
+                        { name: 'Llama 3.3 70B (Groq)', value: 'groq:llama-3.3-70b-versatile' },
+                        { name: 'Llama 3.1 8B Instant (Groq)', value: 'groq:llama-3.1-8b-instant' },
+                        { name: 'Mixtral 8x7B (Groq)', value: 'groq:mixtral-8x7b-32768' },
+                        { name: 'Gemma 2 9B (Groq)', value: 'groq:gemma2-9b-it' },
+                        { name: 'Mistral Large (Mistral)', value: 'mistral:mistral-large-latest' },
+                        { name: 'Mistral Small (Mistral)', value: 'mistral:mistral-small-latest' },
+                        { name: 'Ministral 14B (Mistral)', value: 'mistral:ministral-14b-latest' }
                     ]
                 }
             ]
@@ -133,7 +136,7 @@ export async function execute(req, res) {
             if (!channel) throw new Error("Channel not found.");
 
             await channel.send({
-                content: `ℹ️ **Current Configuration**\n\n**Model:** \`${cfg.model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
+                content: `ℹ️ **Current Configuration**\n\n**AI Provider:** \`${cfg.provider}\`\n**Model:** \`${cfg.model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
                 files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
             });
 
@@ -154,7 +157,13 @@ export async function execute(req, res) {
         // MODEL
         if (subCommand === 'model') {
             const nameOption = subOptions.find(o => o.name === 'name');
-            setModel(nameOption.value);
+            const parts = nameOption.value.split(':');
+            if (parts.length >= 2) {
+                setProvider(parts[0]);
+                setModel(parts.slice(1).join(':'));
+            } else {
+                setModel(nameOption.value);
+            }
             await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
             return;
         }
@@ -235,7 +244,7 @@ async function sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequ
     if (!channel) throw new Error("Channel not found.");
 
     await channel.send({
-        content: `✅ **Configuration Updated!**\n\n**Model:** \`${cfg.model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
+        content: `✅ **Configuration Updated!**\n\n**AI Provider:** \`${cfg.provider}\`\n**Model:** \`${cfg.model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
         files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
     });
 

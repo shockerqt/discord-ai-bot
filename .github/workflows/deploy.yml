@@ -44,12 +44,10 @@ jobs:
             echo "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}"
             echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}"
             echo "TENOR_API_KEY=${{ secrets.TENOR_API_KEY }}"
-            echo "CHAT_PROVIDER=${{ vars.CHAT_PROVIDER }}"
             echo "DEFAULT_DEBUG_MODE=${{ vars.DEFAULT_DEBUG_MODE }}"
             echo "PORT=${{ vars.PORT }}"
           } > $TARGET_DIR/.env
 
-          # Prepare Target
           cd $TARGET_DIR
 
           echo "Installing dependencies..."

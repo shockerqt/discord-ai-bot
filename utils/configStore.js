@@ -11,7 +11,8 @@ const CONFIG_PATH = join(__dirname, '../config.xml');
 
 // Default values
 const DEFAULT_CONFIG = {
-    model: 'mistral-small-latest',
+    provider: 'groq',
+    model: 'llama-3.3-70b-versatile',
     temperature: 0.7,
     presence_penalty: 0,
     frequency_penalty: 0,
@@ -26,6 +27,10 @@ let config = { ...DEFAULT_CONFIG };
  */
 function parseXmlConfig(xmlContent) {
     const parsed = {};
+
+    // Extract provider
+    const provMatch = xmlContent.match(/<provider>([\s\S]*?)<\/provider>/i);
+    if (provMatch) parsed.provider = provMatch[1].trim();
 
     // Extract model
     const modelMatch = xmlContent.match(/<model>([\s\S]*?)<\/model>/i);
@@ -55,6 +60,7 @@ function parseXmlConfig(xmlContent) {
  */
 function generateXml(cfg) {
     return `<config>
+<provider>${cfg.provider}</provider>
 <model>${cfg.model}</model>
 <temperature>${cfg.temperature}</temperature>
 <presence_penalty>${cfg.presence_penalty}</presence_penalty>
@@ -103,8 +109,14 @@ export function getTemperature() { return config.temperature; }
 export function getPresencePenalty() { return config.presence_penalty; }
 export function getFrequencyPenalty() { return config.frequency_penalty; }
 export function getPersonality() { return config.personality; }
+export function getProvider() { return config.provider; }
 
 // Setters (auto-save)
+export function setProvider(value) {
+    config.provider = value;
+    saveConfig();
+}
+
 export function setModel(value) {
     config.model = value;
     saveConfig();
