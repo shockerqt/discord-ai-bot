@@ -53,8 +53,10 @@ jobs:
           cd $TARGET_DIR
 
           echo "Installing dependencies..."
-          # Install dependencies locally on server
-          npm install --omit=dev
+          # Strip lockfile to avoid strictly enforcing Windows x64 optional native dependencies on ARM Linux
+          rm -f package-lock.json
+          # Install dependencies locally on server (fresh resolution for ARM)
+          npm install --omit=dev --no-package-lock
 
           echo "Registering Slash Commands..."
           npm run register
