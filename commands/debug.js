@@ -61,9 +61,6 @@ export async function execute(req, res) {
     };
 
     let content = modeMessages[mode];
-    if (DEFAULT_DEBUG_MODE && mode === 'off') {
-        content += `\n*(Note: DEFAULT_DEBUG_MODE="${DEFAULT_DEBUG_MODE}" will still apply)*`;
-    }
 
     return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
