@@ -54,7 +54,7 @@ jobs:
 
           echo "Installing dependencies..."
           # Install dependencies locally on server
-          npm ci --production
+          npm install --omit=dev
 
           echo "Registering Slash Commands..."
           npm run register
