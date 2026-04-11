@@ -35,17 +35,17 @@ jobs:
           rsync -av --exclude='.git' --exclude='node_modules' --exclude='.env' . $TARGET_DIR/
 
           # Write .env from GitHub Secrets
-          cat > $TARGET_DIR/.env << 'ENVEOF'
-APP_ID=${{ secrets.APP_ID }}
-DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
-PUBLIC_KEY=${{ secrets.PUBLIC_KEY }}
-MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}
-GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
-TENOR_API_KEY=${{ secrets.TENOR_API_KEY }}
-CHAT_PROVIDER=${{ vars.CHAT_PROVIDER }}
-DEFAULT_DEBUG_MODE=${{ vars.DEFAULT_DEBUG_MODE }}
-PORT=${{ vars.PORT }}
-ENVEOF
+          {
+            echo "APP_ID=${{ secrets.APP_ID }}"
+            echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}"
+            echo "PUBLIC_KEY=${{ secrets.PUBLIC_KEY }}"
+            echo "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}"
+            echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}"
+            echo "TENOR_API_KEY=${{ secrets.TENOR_API_KEY }}"
+            echo "CHAT_PROVIDER=${{ vars.CHAT_PROVIDER }}"
+            echo "DEFAULT_DEBUG_MODE=${{ vars.DEFAULT_DEBUG_MODE }}"
+            echo "PORT=${{ vars.PORT }}"
+          } > $TARGET_DIR/.env
 
           # Prepare Target
           cd $TARGET_DIR
