@@ -76,6 +76,25 @@ npm run ngrok
    - En **Interactions Endpoint URL**, pega: `https://xxxx.ngrok.io/interactions`
    - Guarda los cambios
 
+## 🚀 Despliegue (CI/CD)
+
+El bot incluye un workflow de GitHub Actions (`.github/workflows/deploy.yml`) para despliegue automático en un self-hosted runner al hacer push a la rama `main`. 
+
+Durante el despliegue, el archivo `.env` se genera automáticamente. Para configurarlo, debes añadir los siguientes **Secrets** y **Variables** en tu repositorio (`Settings > Secrets and variables > Actions`):
+
+**Repository Secrets:**
+- `APP_ID`
+- `DISCORD_TOKEN`
+- `PUBLIC_KEY`
+- `MISTRAL_API_KEY`
+- `GROQ_API_KEY`
+- `TENOR_API_KEY` (Opcional, si usas `gif_tool`)
+
+**Repository Variables:**
+- `CHAT_PROVIDER` (Ej: `mistral` o `groq`)
+- `DEFAULT_DEBUG_MODE` (Ej: `full`, `thoughts`, `off`)
+- `PORT` (Ej: `3000`)
+
 ## 📋 Comandos
 
 | Comando | Descripción |

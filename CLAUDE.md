@@ -291,11 +291,13 @@ Debug output is sent as file attachments to avoid cluttering the channel.
 Deployment is handled by `.github/workflows/deploy.yml` on push to `main`:
 
 1. Syncs files to `/opt/zavier-sama` on a self-hosted runner (excludes `.git`, `node_modules`, `.env`)
-2. Runs `npm ci --production`
-3. Registers slash commands via `npm run register`
-4. Restarts PM2 process named `zavier-sama` or `zavier-sama-app`
+2. Generates the `.env` file dynamically using GitHub Secrets and Variables.
+3. Runs `npm ci --production`
+4. Registers slash commands via `npm run register`
+5. Restarts PM2 process named `zavier-sama` or `app.js`
 
-The `.env` file is managed manually on the server and is never synced by CI.
+**Required GitHub Secrets:** `APP_ID`, `DISCORD_TOKEN`, `PUBLIC_KEY`, `MISTRAL_API_KEY`, `GROQ_API_KEY`, `TENOR_API_KEY`
+**Required GitHub Variables:** `CHAT_PROVIDER`, `DEFAULT_DEBUG_MODE`, `PORT`
 
 ---
 

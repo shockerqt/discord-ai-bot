@@ -12,3 +12,4 @@ Lista de mejoras iterativas para el flujo principal de chat y el cerebro del bot
 ## ✅ Done
 - Implementación de `/configure` para personalidad y temperatura.
 - Implementación del sistema de "modos" con RNG (Silent, Emote, Text).
+- **[Migración a Groq]** Implementación de nuevo SDK de LLM y `GroqChatAdapter.js` como proveedor activo por defecto.
