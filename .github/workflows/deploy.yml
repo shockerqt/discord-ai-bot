@@ -28,15 +28,28 @@ jobs:
           sudo chown -R $USER:$USER $TARGET_DIR
 
           echo "Deploying to $TARGET_DIR..."
-          
-          # Sync files: 
-          # We use rsync for efficiency if available, or cp. 
+
+          # Sync files:
+          # We use rsync for efficiency if available, or cp.
           # Exclude .git and node_modules to keep copy clean/fast (npm ci will rebuild)
           rsync -av --exclude='.git' --exclude='node_modules' --exclude='.env' . $TARGET_DIR/
 
+          # Write .env from GitHub Secrets
+          cat > $TARGET_DIR/.env << 'ENVEOF'
+APP_ID=${{ secrets.APP_ID }}
+DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
+PUBLIC_KEY=${{ secrets.PUBLIC_KEY }}
+MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}
+GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+TENOR_API_KEY=${{ secrets.TENOR_API_KEY }}
+CHAT_PROVIDER=${{ vars.CHAT_PROVIDER }}
+DEFAULT_DEBUG_MODE=${{ vars.DEFAULT_DEBUG_MODE }}
+PORT=${{ vars.PORT }}
+ENVEOF
+
           # Prepare Target
           cd $TARGET_DIR
-          
+
           echo "Installing dependencies..."
           # Install dependencies locally on server
           npm ci --production

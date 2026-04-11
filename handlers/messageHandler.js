@@ -19,7 +19,7 @@ import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messa
 import { getConfig } from '../utils/configStore.js';
 
 const aiProvider = ChatProviderFactory.createProvider();
-const DECISION_MODEL = 'ministral-14b-latest';
+const DECISION_MODEL = aiProvider.decisionModel;
 
 // ============================================================================
 // UTILITY FUNCTIONS

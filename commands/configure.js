@@ -21,14 +21,13 @@ export const data = {
                 {
                     type: 3, // STRING
                     name: 'name',
-                    description: 'Select Mistral Model',
+                    description: 'Model name (e.g. llama-3.3-70b-versatile, mistral-small-latest)',
                     required: true,
                     choices: [
-                        { name: 'Mistral Large', value: 'mistral-large-latest' },
-                        { name: 'Mistral Small', value: 'mistral-small-latest' },
-                        { name: 'Ministral 14B', value: 'ministral-14b-latest' },
-                        { name: 'Ministral 8B', value: 'ministral-8b-latest' },
-                        { name: 'Ministral 3B', value: 'ministral-3b-latest' }
+                        { name: 'Llama 3.3 70B (Groq)', value: 'llama-3.3-70b-versatile' },
+                        { name: 'Llama 3.1 8B Instant (Groq)', value: 'llama-3.1-8b-instant' },
+                        { name: 'Mixtral 8x7B (Groq)', value: 'mixtral-8x7b-32768' },
+                        { name: 'Gemma 2 9B (Groq)', value: 'gemma2-9b-it' }
                     ]
                 }
             ]
