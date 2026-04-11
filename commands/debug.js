@@ -50,11 +50,8 @@ export async function execute(req, res) {
     const modeOption = commandData.options.find(opt => opt.name === 'mode');
     const mode = modeOption ? modeOption.value : 'off';
 
-    if (mode === 'off') {
-        debugChannelsMap.delete(channel_id);
-    } else {
-        debugChannelsMap.set(channel_id, mode);
-    }
+    // Store explicit 'off' to override any global DEFAULT_DEBUG_MODE
+    debugChannelsMap.set(channel_id, mode);
 
     const modeMessages = {
         off: '🔇 Debug mode **DISABLED** for this channel.',
