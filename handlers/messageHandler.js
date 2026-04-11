@@ -18,8 +18,7 @@ import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
 import { getConfig } from '../utils/configStore.js';
 
-const aiProvider = ChatProviderFactory.createProvider();
-const DECISION_MODEL = aiProvider.decisionModel;
+// Dynamic provider instantiation takes place locally within agents
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -98,7 +97,10 @@ async function handleDebugOutput(debugMode, channel, lastMessage, contentStr, me
 /**
  * Call Decision Agent with binary control (RESPONDER / IGNORAR)
  */
-async function callDecisionAgent(history, unprocessedMessages, model = DECISION_MODEL) {
+async function callDecisionAgent(history, unprocessedMessages, model = null) {
+    const aiProvider = ChatProviderFactory.createProvider();
+    const activeModel = model || aiProvider.decisionModel;
+
     // Build context
     let contextContent = '';
 
@@ -120,7 +122,7 @@ async function callDecisionAgent(history, unprocessedMessages, model = DECISION_
             { role: 'system', content: getDecisionSystemMessage() },
             { role: 'user', content: contextContent }
         ], {
-            model: model,
+            model: activeModel,
             temperature: 0.1
         });
 
@@ -169,6 +171,7 @@ import { getToolDefinitions, executeTool } from '../utils/tools/registry.js';
  * Call Lumi Agent with Tool Support
  */
 async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
+    const aiProvider = ChatProviderFactory.createProvider();
     let systemContent = await getLumiSystemMessage(context);
 
     // Inject focus instructions if IDs present
