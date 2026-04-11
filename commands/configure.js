@@ -26,8 +26,10 @@ export const data = {
                     choices: [
                         { name: 'Llama 3.3 70B (Groq)', value: 'groq:llama-3.3-70b-versatile' },
                         { name: 'Llama 3.1 8B Instant (Groq)', value: 'groq:llama-3.1-8b-instant' },
+                        { name: 'Llama-4 Scout 17B (Groq)', value: 'groq:meta-llama/llama-4-scout-17b-16e-instruct' },
+                        { name: 'Qwen 3 32B (Groq)', value: 'groq:qwen/qwen3-32b' },
+                        { name: 'Kimi K2 Instruct (Groq)', value: 'groq:moonshotai/kimi-k2-instruct' },
                         { name: 'Mixtral 8x7B (Groq)', value: 'groq:mixtral-8x7b-32768' },
-                        { name: 'Gemma 2 9B (Groq)', value: 'groq:gemma2-9b-it' },
                         { name: 'Mistral Large (Mistral)', value: 'mistral:mistral-large-latest' },
                         { name: 'Mistral Small (Mistral)', value: 'mistral:mistral-small-latest' },
                         { name: 'Ministral 14B (Mistral)', value: 'mistral:ministral-14b-latest' }
