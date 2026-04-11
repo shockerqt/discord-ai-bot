@@ -44,6 +44,7 @@ jobs:
             echo "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}"
             echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}"
             echo "TENOR_API_KEY=${{ secrets.TENOR_API_KEY }}"
+            echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}"
             echo "DEFAULT_DEBUG_MODE=${{ vars.DEFAULT_DEBUG_MODE }}"
             echo "PORT=${{ vars.PORT }}"
           } > $TARGET_DIR/.env

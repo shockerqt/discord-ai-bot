@@ -89,6 +89,7 @@ Durante el despliegue, el archivo `.env` se genera automáticamente. Para config
 - `MISTRAL_API_KEY`
 - `GROQ_API_KEY`
 - `TENOR_API_KEY` (Opcional, si usas `gif_tool`)
+- `GOOGLE_API_KEY` (Requerido para la API de Gemini)
 
 **Repository Variables:**
 - `DEFAULT_DEBUG_MODE` (Ej: `full`, `thoughts`, `off`)
