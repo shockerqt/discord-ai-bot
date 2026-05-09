@@ -117,9 +117,9 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
         contextContent += `${msg.status}: [${msg.author}] (ID:${msg.id}) "${msg.content}"\n`;
     });
 
-    const FALLBACK_MODEL = 'gemini-3.1-flash-lite';
-    const modelsToTry = activeModel !== FALLBACK_MODEL
-        ? [activeModel, FALLBACK_MODEL]
+    const FALLBACK_MODELS = ['gemma-3-27b-it', 'gemini-3.1-flash-lite'];
+    const modelsToTry = activeModel !== 'gemini-3.1-flash-lite'
+        ? [activeModel, ...FALLBACK_MODELS.filter(m => m !== activeModel)]
         : [activeModel];
 
     for (const modelAttempt of modelsToTry) {
@@ -170,7 +170,7 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
                     rawResponse: '', contextSent: contextContent, decisionModel: modelAttempt
                 };
             }
-            console.warn(`[DecisionAgent] Primary model failed, trying fallback: ${FALLBACK_MODEL}`);
+            console.warn(`[DecisionAgent] Primary model failed, trying fallback: ${modelsToTry[modelsToTry.indexOf(modelAttempt) + 1]}`);
         }
     }
 }
