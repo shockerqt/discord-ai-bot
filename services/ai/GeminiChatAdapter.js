@@ -127,7 +127,14 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         if (maxTokens !== undefined) config.maxOutputTokens = maxTokens;
         // presencePenalty and frequencyPenalty are NOT supported by Gemini/Gemma models
         if (systemInstruction) config.systemInstruction = systemInstruction;
-        if (geminiTools) config.tools = geminiTools;
+        if (geminiTools) {
+            config.tools = geminiTools;
+            if (toolChoice === 'auto') {
+                config.toolConfig = { functionCallingConfig: { mode: 'AUTO' } };
+            } else if (toolChoice === 'any' || toolChoice === 'required') {
+                config.toolConfig = { functionCallingConfig: { mode: 'ANY' } };
+            }
+        }
 
 
         const MAX_RETRIES = 3;
