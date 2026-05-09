@@ -13,7 +13,7 @@ const CONFIG_PATH = join(__dirname, '../config.xml');
 const DEFAULT_CONFIG = {
     provider: 'gemini',
     model: 'gemini-3.1-flash-lite',
-    decision_model: 'gemma-4-31b-it',
+    decision_model: 'gemini-2.0-flash-lite',
     temperature: 0.7,
     presence_penalty: 0,
     frequency_penalty: 0,

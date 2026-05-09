@@ -5,7 +5,7 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
     constructor(config) {
         super(config);
         this.client = new GoogleGenAI({ apiKey: config.apiKey });
-        this.decisionModel = 'gemma-4-31b-it';
+        this.decisionModel = 'gemini-2.0-flash-lite';
     }
 
     /**
