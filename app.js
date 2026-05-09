@@ -16,6 +16,7 @@ import * as joinCommand from './commands/join.js';
 import * as debugCommand from './commands/debug.js';
 import * as historyCommand from './commands/history.js';
 import { getActiveChannels, getAllMessages } from './utils/messageStore.js';
+import { getConfig, setDecisionModel } from './utils/configStore.js';
 
 // Create an express app
 const app = express();
@@ -70,6 +71,17 @@ app.get('/api/channels', basicAuth, async (req, res) => {
 
 app.get('/api/channels/:id/messages', basicAuth, (req, res) => {
   res.json(getAllMessages(req.params.id) || []);
+});
+
+// Config API (Protected)
+app.get('/api/config', basicAuth, (req, res) => {
+  res.json(getConfig());
+});
+
+app.patch('/api/config', basicAuth, express.json(), (req, res) => {
+  const { decision_model } = req.body;
+  if (decision_model !== undefined) setDecisionModel(decision_model);
+  res.json(getConfig());
 });
 
 // Command Registry

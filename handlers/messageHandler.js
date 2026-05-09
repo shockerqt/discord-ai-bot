@@ -16,7 +16,7 @@ import {
 import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
-import { getConfig } from '../utils/configStore.js';
+import { getConfig, getDecisionModel } from '../utils/configStore.js';
 
 // Dynamic provider instantiation takes place locally within agents
 
@@ -99,7 +99,7 @@ async function handleDebugOutput(debugMode, channel, lastMessage, contentStr, me
  */
 async function callDecisionAgent(history, unprocessedMessages, model = null) {
     const aiProvider = ChatProviderFactory.createProvider();
-    const activeModel = model || aiProvider.decisionModel;
+    const activeModel = model || getDecisionModel() || aiProvider.decisionModel;
 
     // Build context
     let contextContent = '';
@@ -148,7 +148,7 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
             }
         }
 
-        return { decisions, reason, rawResponse: content, contextSent: contextContent };
+        return { decisions, reason, rawResponse: content, contextSent: contextContent, decisionModel: activeModel };
 
     } catch (error) {
         console.error("Decision agent error:", error);
@@ -157,7 +157,7 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
         return {
             decisions: unprocessedMessages.map(m => ({ id: m.id, action: 'IGNORAR' })),
             reason: 'Error en agente',
-            rawResponse: '', contextSent: contextContent
+            rawResponse: '', contextSent: contextContent, decisionModel: activeModel
         };
     }
 }
@@ -443,8 +443,8 @@ export async function handlePassiveMessage(messages) {
     });
 
     // Update States
-    if (respondIds.length > 0) updateMessageStatus(contextId, respondIds, MSG_STATUS.PROCESSED, { decision: 'RESPONDER', reason: decisionResult.reason });
-    if (ignoreIds.length > 0) updateMessageStatus(contextId, ignoreIds, MSG_STATUS.PROCESSED, { decision: 'IGNORAR', reason: decisionResult.reason });
+    if (respondIds.length > 0) updateMessageStatus(contextId, respondIds, MSG_STATUS.PROCESSED, { decision: 'RESPONDER', reason: decisionResult.reason, decisionModel: decisionResult.decisionModel });
+    if (ignoreIds.length > 0) updateMessageStatus(contextId, ignoreIds, MSG_STATUS.PROCESSED, { decision: 'IGNORAR', reason: decisionResult.reason, decisionModel: decisionResult.decisionModel });
 
     // 5. Execution Logic
     if (respondIds.length > 0) {

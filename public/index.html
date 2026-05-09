@@ -267,6 +267,78 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--text-secondary);
         }
+
+        /* Config Panel */
+        .config-panel {
+            padding: 15px;
+            border-top: 1px solid var(--border);
+            background-color: var(--bg-panel);
+        }
+
+        .config-panel h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .config-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .config-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .config-select {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 0.8rem;
+            font-family: 'Inter', sans-serif;
+            width: 100%;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .config-select:focus {
+            border-color: var(--accent);
+        }
+
+        .config-save-btn {
+            background-color: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-size: 0.8rem;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+
+        .config-save-btn:hover { background-color: var(--accent-hover); }
+        .config-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .config-status {
+            font-size: 0.72rem;
+            color: var(--success);
+            text-align: center;
+            min-height: 16px;
+            margin-top: 4px;
+        }
+
+        .badge.decision-model { color: #a78bfa; border-color: rgba(167, 139, 250, 0.3); }
     </style>
 </head>
 <body>
@@ -279,6 +351,24 @@
             </div>
             <div class="channel-list" id="channelList">
                 <div class="loader">Loading channels...</div>
+            </div>
+            <!-- Config Panel -->
+            <div class="config-panel">
+                <h3>⚙️ Decision Agent</h3>
+                <div class="config-row">
+                    <label class="config-label">Model</label>
+                    <select class="config-select" id="decisionModelSelect">
+                        <option value="gemma-4-31b-it">Gemma 4 31B (Google)</option>
+                        <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Google)</option>
+                        <option value="llama-3.3-70b-versatile">Llama 3.3 70B (Groq)</option>
+                        <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant (Groq)</option>
+                        <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama-4 Scout 17B (Groq)</option>
+                        <option value="qwen/qwen3-32b">Qwen 3 32B (Groq)</option>
+                        <option value="mistral-large-latest">Mistral Large</option>
+                    </select>
+                </div>
+                <button class="config-save-btn" id="saveConfigBtn" onclick="saveConfig()">Save</button>
+                <div class="config-status" id="configStatus"></div>
             </div>
         </div>
 
@@ -414,8 +504,11 @@
                     if (m.reason) {
                         metaHtml += `<span class="badge" title="${escapeHTML(m.reason)}">Reason: ${escapeHTML(m.reason.length > 30 ? m.reason.substring(0,30)+'...' : m.reason)}</span>`;
                     }
+                    if (m.decisionModel) {
+                        metaHtml += `<span class="badge decision-model">🧠 ${escapeHTML(m.decisionModel)}</span>`;
+                    }
                     if (m.model) {
-                        metaHtml += `<span class="badge">Model: ${m.model}</span>`;
+                        metaHtml += `<span class="badge">💬 ${m.model}</span>`;
                     }
                     if (m.usage) {
                         metaHtml += `<span class="badge">Tokens: ${m.usage.totalTokens}</span>`;
@@ -447,7 +540,56 @@
 
         // Init
         fetchChannels();
-        setInterval(fetchChannels, 10000); // refresh channel list every 10s
+        setInterval(fetchChannels, 10000);
+        fetchConfig();
+
+        async function fetchConfig() {
+            try {
+                const res = await fetch('/api/config');
+                if (!res.ok) return;
+                const cfg = await res.json();
+                const sel = document.getElementById('decisionModelSelect');
+                if (cfg.decision_model) {
+                    // Select matching option or add a custom one
+                    const existing = Array.from(sel.options).find(o => o.value === cfg.decision_model);
+                    if (existing) {
+                        sel.value = cfg.decision_model;
+                    } else {
+                        const opt = document.createElement('option');
+                        opt.value = cfg.decision_model;
+                        opt.textContent = cfg.decision_model + ' (custom)';
+                        sel.appendChild(opt);
+                        sel.value = cfg.decision_model;
+                    }
+                }
+            } catch (err) {
+                console.error('Error fetching config:', err);
+            }
+        }
+
+        async function saveConfig() {
+            const btn = document.getElementById('saveConfigBtn');
+            const status = document.getElementById('configStatus');
+            const model = document.getElementById('decisionModelSelect').value;
+            btn.disabled = true;
+            status.textContent = '';
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decision_model: model })
+                });
+                if (res.ok) {
+                    status.textContent = '✅ Saved!';
+                    setTimeout(() => status.textContent = '', 2000);
+                } else {
+                    status.textContent = '❌ Error saving';
+                }
+            } catch (err) {
+                status.textContent = '❌ Error saving';
+            }
+            btn.disabled = false;
+        }
     </script>
 </body>
 </html>

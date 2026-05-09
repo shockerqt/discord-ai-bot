@@ -13,6 +13,7 @@ const CONFIG_PATH = join(__dirname, '../config.xml');
 const DEFAULT_CONFIG = {
     provider: 'gemini',
     model: 'gemini-3.1-flash-lite',
+    decision_model: 'gemma-4-31b-it',
     temperature: 0.7,
     presence_penalty: 0,
     frequency_penalty: 0,
@@ -48,6 +49,10 @@ function parseXmlConfig(xmlContent) {
     const freqMatch = xmlContent.match(/<frequency_penalty>([\s\S]*?)<\/frequency_penalty>/i);
     if (freqMatch) parsed.frequency_penalty = parseFloat(freqMatch[1].trim());
 
+    // Extract decision_model
+    const decisionMatch = xmlContent.match(/<decision_model>([\s\S]*?)<\/decision_model>/i);
+    if (decisionMatch) parsed.decision_model = decisionMatch[1].trim();
+
     // Extract personality (can contain any content)
     const persMatch = xmlContent.match(/<personality>([\s\S]*?)<\/personality>/i);
     if (persMatch) parsed.personality = persMatch[1].trim();
@@ -62,6 +67,7 @@ function generateXml(cfg) {
     return `<config>
 <provider>${cfg.provider}</provider>
 <model>${cfg.model}</model>
+<decision_model>${cfg.decision_model}</decision_model>
 <temperature>${cfg.temperature}</temperature>
 <presence_penalty>${cfg.presence_penalty}</presence_penalty>
 <frequency_penalty>${cfg.frequency_penalty}</frequency_penalty>
@@ -110,6 +116,7 @@ export function getPresencePenalty() { return config.presence_penalty; }
 export function getFrequencyPenalty() { return config.frequency_penalty; }
 export function getPersonality() { return config.personality; }
 export function getProvider() { return config.provider; }
+export function getDecisionModel() { return config.decision_model; }
 
 // Setters (auto-save)
 export function setProvider(value) {
@@ -119,6 +126,11 @@ export function setProvider(value) {
 
 export function setModel(value) {
     config.model = value;
+    saveConfig();
+}
+
+export function setDecisionModel(value) {
+    config.decision_model = value;
     saveConfig();
 }
 
