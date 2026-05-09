@@ -45,6 +45,7 @@ jobs:
             echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}"
             echo "TENOR_API_KEY=${{ secrets.TENOR_API_KEY }}"
             echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}"
+            echo "DASHBOARD_PASSWORD=${{ secrets.DASHBOARD_PASSWORD }}"
             echo "DEFAULT_DEBUG_MODE=${{ vars.DEFAULT_DEBUG_MODE }}"
             echo "PORT=${{ vars.PORT }}"
           } > $TARGET_DIR/.env

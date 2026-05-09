@@ -366,7 +366,7 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
                     const sentMsg = await sendTextMessage(channel, msg);
                     // Usar el ID real si se envió, sino fallback
                     const realId = sentMsg ? sentMsg.id : null;
-                    addAssistantMessage(contextId, msg.text_content, realId);
+                    addAssistantMessage(contextId, msg.text_content, realId, { usage, provider, model });
 
                     // Small delay to ensure order in Discord if rapid fire?
                     // await new Promise(r => setTimeout(r, 200)); 
@@ -443,8 +443,8 @@ export async function handlePassiveMessage(messages) {
     });
 
     // Update States
-    if (respondIds.length > 0) updateMessageStatus(contextId, respondIds, MSG_STATUS.PROCESSED);
-    if (ignoreIds.length > 0) updateMessageStatus(contextId, ignoreIds, MSG_STATUS.PROCESSED);
+    if (respondIds.length > 0) updateMessageStatus(contextId, respondIds, MSG_STATUS.PROCESSED, { decision: 'RESPONDER', reason: decisionResult.reason });
+    if (ignoreIds.length > 0) updateMessageStatus(contextId, ignoreIds, MSG_STATUS.PROCESSED, { decision: 'IGNORAR', reason: decisionResult.reason });
 
     // 5. Execution Logic
     if (respondIds.length > 0) {

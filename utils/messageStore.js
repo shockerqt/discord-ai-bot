@@ -58,7 +58,8 @@ export function addUserMessages(channelId, userMessages) {
             author: msg.userName,
             timestamp: msg.timestamp,
             status: MSG_STATUS.PENDING,
-            replyTo: msg.replyTo
+            replyTo: msg.replyTo,
+            metadata: {}
         });
     }
 
@@ -82,7 +83,8 @@ export function addAssistantPlaceholder(channelId) {
         content: '(Escribiendo...)',
         author: 'Lumi',
         timestamp: new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' }),
-        status: MSG_STATUS.GENERATING
+        status: MSG_STATUS.GENERATING,
+        metadata: {}
     });
     return id;
 }
@@ -106,7 +108,7 @@ export function resolveAssistantMessage(channelId, placeholderId, content) {
 /**
  * Agrega mensaje de asistente (Legacy / Direct)
  */
-export function addAssistantMessage(channelId, content, messageId = null) {
+export function addAssistantMessage(channelId, content, messageId = null, metadata = {}) {
     if (!content || content.trim() === '') return;
     const messages = getRawMessages(channelId);
     messages.push({
@@ -115,7 +117,8 @@ export function addAssistantMessage(channelId, content, messageId = null) {
         content: content,
         author: 'Lumi',
         timestamp: new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' }),
-        status: MSG_STATUS.PROCESSED
+        status: MSG_STATUS.PROCESSED,
+        metadata: metadata || {}
     });
 }
 
@@ -211,9 +214,9 @@ export function getUnprocessedMessages(channelId) {
 }
 
 /**
- * Actualiza el estado de mensajes específicos
+ * Actualiza el estado de mensajes específicos y opcionalmente añade metadata
  */
-export function updateMessageStatus(channelId, messageIds, newStatus) {
+export function updateMessageStatus(channelId, messageIds, newStatus, additionalMetadata = null) {
     const messages = getRawMessages(channelId);
     const idsSet = new Set(messageIds);
     let count = 0;
@@ -221,6 +224,9 @@ export function updateMessageStatus(channelId, messageIds, newStatus) {
     for (const msg of messages) {
         if (idsSet.has(msg.id)) {
             msg.status = newStatus;
+            if (additionalMetadata) {
+                msg.metadata = { ...(msg.metadata || {}), ...additionalMetadata };
+            }
             count++;
         }
     }
@@ -239,6 +245,13 @@ export function clearMessages(channelId) {
  */
 export function getMessageCount(channelId) {
     return getRawMessages(channelId).length;
+}
+
+/**
+ * Obtiene todos los mensajes raw de un canal (para el dashboard)
+ */
+export function getAllMessages(channelId) {
+    return getRawMessages(channelId);
 }
 
 // Alias for compatibility

@@ -15,11 +15,65 @@ import * as pingCommand from './commands/ping.js';
 import * as joinCommand from './commands/join.js';
 import * as debugCommand from './commands/debug.js';
 import * as historyCommand from './commands/history.js';
+import { getActiveChannels, getAllMessages } from './utils/messageStore.js';
 
 // Create an express app
 const app = express();
 // Get port, or default to 3000
 const PORT = process.env.PORT || 3000;
+
+/**
+ * Simple Basic Auth Middleware
+ */
+function basicAuth(req, res, next) {
+  const password = process.env.DASHBOARD_PASSWORD;
+  
+  // If no password is set in .env, allow access (for backwards compatibility/easy setup)
+  if (!password) return next();
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Lumi Dashboard"');
+    return res.status(401).send('Authentication required');
+  }
+
+  try {
+    const auth = Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
+    const user = auth[0];
+    const pass = auth[1];
+
+    if (user === 'admin' && pass === password) {
+      return next();
+    }
+  } catch (e) {
+    // Invalid auth format
+  }
+
+  res.setHeader('WWW-Authenticate', 'Basic realm="Lumi Dashboard"');
+  return res.status(401).send('Invalid credentials');
+}
+
+// Dashboard API Routes (Protected)
+app.get('/api/channels', basicAuth, async (req, res) => {
+  const channels = getActiveChannels();
+  const data = [];
+  for (const id of channels) {
+    try {
+      const channel = await client.channels.fetch(id);
+      data.push({ id, name: channel.name, guild: channel.guild?.name || 'Direct Message' });
+    } catch (e) {
+      data.push({ id, name: 'Unknown Channel', guild: 'Unknown Guild' });
+    }
+  }
+  res.json(data);
+});
+
+app.get('/api/channels/:id/messages', basicAuth, (req, res) => {
+  res.json(getAllMessages(req.params.id) || []);
+});
+
+// Serve static files for dashboard (Protected)
+app.use('/', basicAuth, express.static('public'));
 
 // Client initialization moved to discordClient.js
 
