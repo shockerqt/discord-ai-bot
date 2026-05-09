@@ -61,6 +61,7 @@ jobs:
           echo "Registering Slash Commands..."
           npm run register
 
-          echo "Restarting service..."
-          # Restart PM2 process
-          pm2 restart zavier-sama || pm2 restart app.js || echo "PM2 restart failed, check process name"
+          echo "Starting/Restarting service..."
+          # Start if not running, restart if already running
+          pm2 startOrRestart ecosystem.config.cjs --env production || pm2 start app.js --name zavier-sama
+          pm2 save
