@@ -117,48 +117,61 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
         contextContent += `${msg.status}: [${msg.author}] (ID:${msg.id}) "${msg.content}"\n`;
     });
 
-    try {
-        const response = await aiProvider.complete([
-            { role: 'system', content: getDecisionSystemMessage() },
-            { role: 'user', content: contextContent }
-        ], {
-            model: activeModel,
-            temperature: 0.1
-        });
+    const FALLBACK_MODEL = 'gemini-3.1-flash-lite';
+    const modelsToTry = activeModel !== FALLBACK_MODEL
+        ? [activeModel, FALLBACK_MODEL]
+        : [activeModel];
 
-        const content = response.content || '';
+    for (const modelAttempt of modelsToTry) {
+        try {
+            const response = await aiProvider.complete([
+                { role: 'system', content: getDecisionSystemMessage() },
+                { role: 'user', content: contextContent }
+            ], {
+                model: modelAttempt,
+                temperature: 0.1
+            });
 
-        // Parse Decisions XML
-        const decisions = [];
-        const msgRegex = /<MSG\s+id="([^"]+)"\s+action="([^"]+)"\s*\/>/gi;
-        let match;
-        while ((match = msgRegex.exec(content)) !== null) {
-            decisions.push({ id: match[1], action: match[2].toUpperCase() });
-        }
+            const content = response.content || '';
 
-        const reasonMatch = content.match(/<REASON>(.*?)<\/REASON>/i);
-        const reason = reasonMatch?.[1]?.trim() || 'Sin razón';
-
-        // Fallback
-        if (decisions.length === 0) {
-            if (content.includes('RESPONDER')) {
-                unprocessedMessages.forEach(m => decisions.push({ id: m.id, action: 'RESPONDER' }));
-            } else {
-                unprocessedMessages.forEach(m => decisions.push({ id: m.id, action: 'IGNORAR' }));
+            // Parse Decisions XML
+            const decisions = [];
+            const msgRegex = /<MSG\s+id="([^"]+)"\s+action="([^"]+)"\s*\/>/gi;
+            let match;
+            while ((match = msgRegex.exec(content)) !== null) {
+                decisions.push({ id: match[1], action: match[2].toUpperCase() });
             }
+
+            const reasonMatch = content.match(/<REASON>(.*?)<\/REASON>/i);
+            const reason = reasonMatch?.[1]?.trim() || 'Sin razón';
+
+            // Fallback parse
+            if (decisions.length === 0) {
+                if (content.includes('RESPONDER')) {
+                    unprocessedMessages.forEach(m => decisions.push({ id: m.id, action: 'RESPONDER' }));
+                } else {
+                    unprocessedMessages.forEach(m => decisions.push({ id: m.id, action: 'IGNORAR' }));
+                }
+            }
+
+            if (modelAttempt !== activeModel) {
+                console.warn(`[DecisionAgent] Used fallback model: ${modelAttempt}`);
+            }
+
+            return { decisions, reason, rawResponse: content, contextSent: contextContent, decisionModel: modelAttempt };
+
+        } catch (error) {
+            console.error(`Decision agent error with model ${modelAttempt}:`, error.message);
+            if (modelAttempt === modelsToTry[modelsToTry.length - 1]) {
+                // Last model also failed — safe fail
+                return {
+                    decisions: unprocessedMessages.map(m => ({ id: m.id, action: 'IGNORAR' })),
+                    reason: 'Error en agente',
+                    rawResponse: '', contextSent: contextContent, decisionModel: modelAttempt
+                };
+            }
+            console.warn(`[DecisionAgent] Primary model failed, trying fallback: ${FALLBACK_MODEL}`);
         }
-
-        return { decisions, reason, rawResponse: content, contextSent: contextContent, decisionModel: activeModel };
-
-    } catch (error) {
-        console.error("Decision agent error:", error);
-        // Default safe action: Ignore to avoid loops on error, or Respond?
-        // Let's safe fail to Ignore.
-        return {
-            decisions: unprocessedMessages.map(m => ({ id: m.id, action: 'IGNORAR' })),
-            reason: 'Error en agente',
-            rawResponse: '', contextSent: contextContent, decisionModel: activeModel
-        };
     }
 }
 
