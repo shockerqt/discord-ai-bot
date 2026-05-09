@@ -24,7 +24,8 @@ Para cada ID incluido en la lista `[REPLY TO MESSAGE_IDs]`, realiza el siguiente
          - ¿Cuántos mensajes `<MESSAGE>` generaré para responder a este ID en particular?
 
 ## 4. FORMATO DE SALIDA (TAGS OBLIGATORIO) -- NO USES JSON
-Responde SIEMPRE usando estos tags exactos.
+Responde SIEMPRE usando estos tags exactos. 
+(EXCEPCIÓN CRÍTICA: Si necesitas invocar una HERRAMIENTA o FUNCIÓN (como buscar un GIF), tienes permiso absoluto para ignorar estas reglas XML y usar la herramienta directamente).
 
 <THOUGHT>
 Pensamiento específico para el ID1...

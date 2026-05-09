@@ -165,6 +165,7 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 console.log(`[GeminiAdapter] Sending request to model: ${model}${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+                console.log(`[GeminiAdapter] Config payload:`, JSON.stringify(config, null, 2));
                 const response = await this.client.models.generateContent({
                     model,
                     contents,
