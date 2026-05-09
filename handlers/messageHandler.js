@@ -186,9 +186,8 @@ import { getToolDefinitions, executeTool } from '../utils/tools/registry.js';
 async function callLumiAgent(historyMessages, targetIds = [], context = {}, options = {}) {
     const aiProvider = ChatProviderFactory.createProvider();
     
-    let systemContent = options.bypassPersonality 
-        ? "Eres Lumi, un asistente virtual de IA útil, directo y conversacional. Fuiste invocada directamente. Responde a las consultas del usuario de manera clara y objetiva, sin usar tu personalidad habitual."
-        : await getLumiSystemMessage(context);
+    const fullContext = { ...context, bypassPersonality: options.bypassPersonality };
+    let systemContent = await getLumiSystemMessage(fullContext);
 
     // Inject focus instructions if IDs present
     if (targetIds && targetIds.length > 0) {

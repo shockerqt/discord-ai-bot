@@ -29,10 +29,13 @@ const fetchedGuilds = new Set();
  */
 export async function getLumiSystemMessage(context = {}) {
     let instructions = BASE_INSTRUCTIONS;
-    const personality = getPersonality();
-
-    if (personality) {
-        instructions += `\n\n---\n\n${personality}`;
+    if (context.bypassPersonality) {
+        instructions += `\n\n---\n\nEres Lumi, un asistente virtual de IA útil, directo y conversacional. Fuiste invocada directamente. Responde a las consultas del usuario de manera clara y objetiva, sin usar tu personalidad habitual.`;
+    } else {
+        const personality = getPersonality();
+        if (personality) {
+            instructions += `\n\n---\n\n${personality}`;
+        }
     }
 
     // Dynamic Emoji Injection (Simplified Mapping)
