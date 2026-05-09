@@ -40,12 +40,16 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
                         } catch (e) {
                             args = {};
                         }
-                        parts.push({
+                        const partData = {
                             functionCall: {
                                 name: tc.function.name,
                                 args: args
                             }
-                        });
+                        };
+                        if (tc.thoughtSignature) {
+                            partData.thoughtSignature = tc.thoughtSignature;
+                        }
+                        parts.push(partData);
                     }
                 }
                 contents.push({ role: 'model', parts });
@@ -186,7 +190,8 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
                                 function: {
                                     name: part.functionCall.name,
                                     arguments: JSON.stringify(part.functionCall.args || {})
-                                }
+                                },
+                                thoughtSignature: part.thoughtSignature || part.thought_signature
                             });
                         }
                     }
