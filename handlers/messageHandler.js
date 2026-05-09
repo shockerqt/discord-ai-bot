@@ -183,9 +183,12 @@ import { getToolDefinitions, executeTool } from '../utils/tools/registry.js';
 /**
  * Call Lumi Agent with Tool Support
  */
-async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
+async function callLumiAgent(historyMessages, targetIds = [], context = {}, options = {}) {
     const aiProvider = ChatProviderFactory.createProvider();
-    let systemContent = await getLumiSystemMessage(context);
+    
+    let systemContent = options.bypassPersonality 
+        ? "Eres Lumi, un asistente virtual de IA útil, directo y conversacional. Fuiste invocada directamente. Responde a las consultas del usuario de manera clara y objetiva, sin usar tu personalidad habitual."
+        : await getLumiSystemMessage(context);
 
     // Inject focus instructions if IDs present
     if (targetIds && targetIds.length > 0) {
@@ -314,7 +317,7 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
 // LOGIC: TRIGGER RESPONSE
 // ============================================================================
 
-async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
+async function triggerLumiResponse(channel, lastMessage, targetIds = [], options = {}) {
     const contextId = channel.id;
     const debugMode = getDebugMode(contextId);
 
@@ -347,7 +350,7 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = []) {
     try {
         // Generate response
         console.log(`[Trigger] Calling callLumiAgent...`);
-        const { response: finalResponse, trace, usage, provider, model } = await callLumiAgent(history, targetIds, promptContext);
+        const { response: finalResponse, trace, usage, provider, model } = await callLumiAgent(history, targetIds, promptContext, options);
         console.log(`[Trigger] output received. Response length: ${finalResponse ? finalResponse.length : 0}`);
 
         // DEBUG: Full trace including tools
@@ -427,6 +430,21 @@ export async function handlePassiveMessage(messages) {
     // 2. Get all Unprocessed
     const unprocessed = getUnprocessedMessages(contextId);
     if (unprocessed.length === 0) return;
+
+    // Check for Direct Agent Mode
+    const isDirectMention = lastMessage.mentions.has(lastMessage.client.user);
+    if (isDirectMention) {
+        console.log("--- DIRECT AGENT MODE ---");
+        const respondIds = unprocessed.map(m => m.id);
+        updateMessageStatus(contextId, respondIds, MSG_STATUS.PROCESSED, { 
+            decision: 'RESPONDER', 
+            reason: 'Direct Mention (Agent Mode)', 
+            decisionModel: 'Bypass' 
+        });
+        
+        await triggerLumiResponse(lastMessage.channel, lastMessage, respondIds, { bypassPersonality: true });
+        return;
+    }
 
     // 3. Decision Agent
     const history = getDecisionHistory(contextId);
