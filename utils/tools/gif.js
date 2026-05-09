@@ -27,19 +27,20 @@ export const definition = {
  */
 export async function execute(args) {
     const term = args.search_term;
-    const apiKey = process.env.TENOR_API_KEY;
+    const apiKey = process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY;
 
     if (!apiKey) {
-        return JSON.stringify({ error: 'Config Error: TENOR_API_KEY is not set in environment variables.' });
+        return JSON.stringify({ error: 'Config Error: KLIPY_API_KEY is not set in environment variables.' });
     }
 
     try {
         const limit = 5;
-        const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(term)}&key=${apiKey}&client_key=discord_ai_bot&limit=${limit}`;
+        // Klipy is a drop-in replacement for Tenor v2
+        const url = `https://api.klipy.com/v2/search?q=${encodeURIComponent(term)}&key=${apiKey}&client_key=discord_ai_bot&limit=${limit}`;
 
         const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`Tenor API Error: ${response.statusText}`);
+            throw new Error(`Klipy API Error: ${response.statusText}`);
         }
 
         const data = await response.json();
