@@ -1,7 +1,7 @@
 import { InteractionResponseType } from 'discord-interactions';
 import {
-    getConfig, getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty, getProvider,
-    setPersonality, setTemperature, setPresencePenalty, setFrequencyPenalty, setModel, setProvider
+    getConfig, getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty, getProvider, getDecisionModel,
+    setPersonality, setTemperature, setPresencePenalty, setFrequencyPenalty, setModel, setProvider, setDecisionModel
 } from '../utils/configStore.js';
 
 export const data = {
@@ -39,6 +39,28 @@ export const data = {
                         { name: 'Mistral Large (Mistral)', value: 'mistral:mistral-large-latest' },
                         { name: 'Mistral Small (Mistral)', value: 'mistral:mistral-small-latest' },
                         { name: 'Ministral 14B (Mistral)', value: 'mistral:ministral-14b-latest' }
+                    ]
+                }
+            ]
+        },
+        {
+            name: 'decision_model',
+            description: 'Set the AI model to use for the Decision Agent',
+            type: 1, // SUB_COMMAND
+            options: [
+                {
+                    type: 3, // STRING
+                    name: 'name',
+                    description: 'Model name',
+                    required: true,
+                    choices: [
+                        { name: 'Gemini 3.1 Flash Lite (Google)', value: 'gemini-3.1-flash-lite' },
+                        { name: 'Gemini 3 Flash (Google)', value: 'gemini-3-flash' },
+                        { name: 'Gemini 2.5 Flash (Google)', value: 'gemini-2.5-flash' },
+                        { name: 'Gemini 2.5 Flash Lite (Google)', value: 'gemini-2.5-flash-lite' },
+                        { name: 'Gemma 4 31B (Google)', value: 'gemma-4-31b-it' },
+                        { name: 'Gemma 4 26B MoE (Google)', value: 'gemma-4-26b-a4b-it' },
+                        { name: 'Llama 3.3 70B (Groq)', value: 'llama-3.3-70b-versatile' }
                     ]
                 }
             ]
@@ -144,7 +166,7 @@ export async function execute(req, res) {
             if (!channel) throw new Error("Channel not found.");
 
             await channel.send({
-                content: `ℹ️ **Current Configuration**\n\n**AI Provider:** \`${cfg.provider}\`\n**Model:** \`${cfg.model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
+                content: `ℹ️ **Current Configuration**\n\n**AI Provider:** \`${cfg.provider}\`\n**Lumi Model:** \`${cfg.model}\`\n**Decision Model:** \`${cfg.decision_model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
                 files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
             });
 
@@ -172,6 +194,14 @@ export async function execute(req, res) {
             } else {
                 setModel(nameOption.value);
             }
+            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            return;
+        }
+
+        // DECISION MODEL
+        if (subCommand === 'decision_model') {
+            const nameOption = subOptions.find(o => o.name === 'name');
+            setDecisionModel(nameOption.value);
             await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
             return;
         }
@@ -252,7 +282,7 @@ async function sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequ
     if (!channel) throw new Error("Channel not found.");
 
     await channel.send({
-        content: `✅ **Configuration Updated!**\n\n**AI Provider:** \`${cfg.provider}\`\n**Model:** \`${cfg.model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
+        content: `✅ **Configuration Updated!**\n\n**AI Provider:** \`${cfg.provider}\`\n**Lumi Model:** \`${cfg.model}\`\n**Decision Model:** \`${cfg.decision_model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
         files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
     });
 
