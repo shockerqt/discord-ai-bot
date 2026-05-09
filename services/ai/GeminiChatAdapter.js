@@ -130,10 +130,6 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         if (systemInstruction) config.systemInstruction = systemInstruction;
         if (geminiTools) config.tools = geminiTools;
 
-        // Disable thinking for gemini models to reduce latency (gemma doesn't support it)
-        if (model.startsWith('gemini-')) {
-            config.thinkingConfig = { thinkingBudget: 0 };
-        }
 
         try {
             console.log(`[GeminiAdapter] Sending request to model: ${model}`);
