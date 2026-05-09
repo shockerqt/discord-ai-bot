@@ -38,7 +38,7 @@ export async function getLumiSystemMessage(context = {}) {
         }
     }
 
-    instructions += `\n\n## USO DE HERRAMIENTAS (GIFs)\nTienes acceso a una herramienta de búsqueda de GIFs (gif_tool). De vez en cuando, si la conversación es divertida, casual, o amerita una reacción visual, ¡no dudes en usarla para enviar un meme o un GIF animado! No lo hagas todo el tiempo, solo cuando aporte al momento.`;
+    instructions += `\n\n## USO DE HERRAMIENTAS (GIFs)\nTienes acceso a una herramienta de búsqueda de GIFs (gif_tool). De vez en cuando, si la conversación es divertida, casual, o amerita una reacción visual, ¡no dudes en usarla para enviar un meme o un GIF animado! No lo hagas todo el tiempo, solo cuando aporte al momento. IMPORTANTE: No inventes URLs de Giphy ni envíes links falsos. DEBES usar la herramienta gif_tool para obtener el enlace real.`;
 
     // Dynamic Emoji Injection (Simplified Mapping)
     // Collect from Guild AND Application

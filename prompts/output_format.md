@@ -25,7 +25,7 @@ Para cada ID incluido en la lista `[REPLY TO MESSAGE_IDs]`, realiza el siguiente
 
 ## 4. FORMATO DE SALIDA (TAGS OBLIGATORIO) -- NO USES JSON
 Responde SIEMPRE usando estos tags exactos. 
-(EXCEPCIÓN CRÍTICA: Si necesitas invocar una HERRAMIENTA o FUNCIÓN (como buscar un GIF), tienes permiso absoluto para ignorar estas reglas XML y usar la herramienta directamente).
+(EXCEPCIÓN CRÍTICA: Si necesitas invocar una HERRAMIENTA o FUNCIÓN (como buscar un GIF), tienes permiso absoluto para ignorar estas reglas XML temporalmente y hacer la llamada a la herramienta. NUNCA inventes URLs (ej. de Giphy) para el tag <ATTACHMENT>. Si quieres enviar un GIF, DEBES llamar primero a la herramienta `gif_tool`, esperar el resultado, y poner la URL que te devuelva en el tag <ATTACHMENT>).
 
 <THOUGHT>
 Pensamiento específico para el ID1...
