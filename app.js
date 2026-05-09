@@ -72,13 +72,6 @@ app.get('/api/channels/:id/messages', basicAuth, (req, res) => {
   res.json(getAllMessages(req.params.id) || []);
 });
 
-// Serve static files for dashboard (Protected)
-app.use('/', basicAuth, express.static('public'));
-
-// Client initialization moved to discordClient.js
-
-export { client }; // Re-export if needed, or just let modules import from discordClient.js
-
 // Command Registry
 const commands = {
   [resetCommand.data.name]: resetCommand,
@@ -92,6 +85,7 @@ const commands = {
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests
+ * IMPORTANT: Must be defined BEFORE the basicAuth middleware to avoid 401 on Discord verification
  */
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
   // Interaction type and data
@@ -131,6 +125,11 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
   console.warn(`Unknown interaction type: ${type}`);
   return res.status(400).json({ error: 'unknown interaction type' });
 });
+
+export { client };
+
+// Serve static files for dashboard (Protected) - after /interactions so basicAuth doesn't block it
+app.use('/', basicAuth, express.static('public'));
 
 app.listen(PORT, async () => {
   console.log('Listening on port', PORT);
