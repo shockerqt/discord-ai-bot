@@ -62,13 +62,17 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
                 } catch (e) {
                     responseData = { result: msg.content };
                 }
+                const funcRes = {
+                    name: msg.name,
+                    response: responseData
+                };
+                if (msg.tool_call_id) {
+                    funcRes.id = msg.tool_call_id;
+                }
                 contents.push({
                     role: 'user',
                     parts: [{
-                        functionResponse: {
-                            name: msg.name,
-                            response: responseData
-                        }
+                        functionResponse: funcRes
                     }]
                 });
                 continue;
@@ -92,12 +96,30 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
     _transformTools(tools) {
         if (!tools || tools.length === 0) return undefined;
 
+        const uppercaseType = (schema) => {
+            if (!schema) return schema;
+            const newSchema = { ...schema };
+            if (typeof newSchema.type === 'string') {
+                newSchema.type = newSchema.type.toUpperCase();
+            }
+            if (newSchema.properties) {
+                newSchema.properties = { ...newSchema.properties };
+                for (const key in newSchema.properties) {
+                    newSchema.properties[key] = uppercaseType(newSchema.properties[key]);
+                }
+            }
+            if (newSchema.items) {
+                newSchema.items = uppercaseType(newSchema.items);
+            }
+            return newSchema;
+        };
+
         const declarations = tools.map(tool => {
             const func = tool.function || tool;
             return {
                 name: func.name,
                 description: func.description,
-                parameters: func.parameters
+                parameters: uppercaseType(func.parameters)
             };
         });
 
@@ -130,9 +152,9 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         if (geminiTools) {
             config.tools = geminiTools;
             if (toolChoice === 'auto') {
-                config.toolConfig = { functionCallingConfig: { mode: 'AUTO' } };
+                config.toolConfig = { functionCallingConfig: { mode: 'auto' } };
             } else if (toolChoice === 'any' || toolChoice === 'required') {
-                config.toolConfig = { functionCallingConfig: { mode: 'ANY' } };
+                config.toolConfig = { functionCallingConfig: { mode: 'any' } };
             }
         }
 
