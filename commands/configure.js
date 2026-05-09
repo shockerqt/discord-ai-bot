@@ -25,6 +25,9 @@ export const data = {
                     required: true,
                     choices: [
                         { name: 'Gemini 3.1 Flash Lite (Google)', value: 'gemini:gemini-3.1-flash-lite' },
+                        { name: 'Gemini 3 Flash (Google)', value: 'gemini:gemini-3-flash' },
+                        { name: 'Gemini 2.5 Flash (Google)', value: 'gemini:gemini-2.5-flash' },
+                        { name: 'Gemini 2.5 Flash Lite (Google)', value: 'gemini:gemini-2.5-flash-lite' },
                         { name: 'Gemma 4 31B (Google)', value: 'gemini:gemma-4-31b-it' },
                         { name: 'Gemma 4 26B MoE (Google)', value: 'gemini:gemma-4-26b-a4b-it' },
                         { name: 'Llama 3.3 70B (Groq)', value: 'groq:llama-3.3-70b-versatile' },

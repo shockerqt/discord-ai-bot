@@ -120,7 +120,7 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
     const FALLBACK_MODELS = ['gemma-4-31b-it', 'gemini-3.1-flash-lite'];
     const modelsToTry = activeModel !== 'gemini-3.1-flash-lite'
         ? [activeModel, ...FALLBACK_MODELS.filter(m => m !== activeModel)]
-        : [activeModel];
+        : [activeModel, 'gemma-4-31b-it'];
 
     for (const modelAttempt of modelsToTry) {
         try {
