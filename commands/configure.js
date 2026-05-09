@@ -24,6 +24,8 @@ export const data = {
                     description: 'Model name (provider:model)',
                     required: true,
                     choices: [
+                        { name: 'Gemini 3.1 Flash Lite (Google)', value: 'gemini:gemini-3.1-flash-lite' },
+                        { name: 'Gemma 4 31B (Google)', value: 'gemini:gemma-4-31b-it' },
                         { name: 'Llama 3.3 70B (Groq)', value: 'groq:llama-3.3-70b-versatile' },
                         { name: 'Llama 3.1 8B Instant (Groq)', value: 'groq:llama-3.1-8b-instant' },
                         { name: 'Llama-4 Scout 17B (Groq)', value: 'groq:meta-llama/llama-4-scout-17b-16e-instruct' },

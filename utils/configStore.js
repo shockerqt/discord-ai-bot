@@ -11,8 +11,8 @@ const CONFIG_PATH = join(__dirname, '../config.xml');
 
 // Default values
 const DEFAULT_CONFIG = {
-    provider: 'groq',
-    model: 'llama-3.3-70b-versatile',
+    provider: 'gemini',
+    model: 'gemini-3.1-flash-lite',
     temperature: 0.7,
     presence_penalty: 0,
     frequency_penalty: 0,

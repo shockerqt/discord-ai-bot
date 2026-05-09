@@ -1,5 +1,6 @@
 import { MistralChatAdapter } from './MistralChatAdapter.js';
 import { GroqChatAdapter } from './GroqChatAdapter.js';
+import { GeminiChatAdapter } from './GeminiChatAdapter.js';
 import { getConfig } from '../../utils/configStore.js';
 
 export class ChatProviderFactory {
@@ -14,6 +15,8 @@ export class ChatProviderFactory {
                 return new MistralChatAdapter({ apiKey: process.env.MISTRAL_API_KEY });
             case 'groq':
                 return new GroqChatAdapter({ apiKey: process.env.GROQ_API_KEY });
+            case 'gemini':
+                return new GeminiChatAdapter({ apiKey: process.env.GOOGLE_API_KEY });
             default:
                 console.warn(`Unknown provider '${providerType}', falling back to Mistral.`);
                 return new MistralChatAdapter({ apiKey: process.env.MISTRAL_API_KEY });

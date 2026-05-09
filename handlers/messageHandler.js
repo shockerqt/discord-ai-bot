@@ -200,7 +200,7 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}) {
         iterations++;
 
         try {
-            const currentModel = context.model || 'mistral-small-latest';
+            const currentModel = context.model || 'gemini-3.1-flash-lite';
             console.log(`[LumiAgent] Iteration ${iterations}. Sending to AI using model: ${currentModel}...`);
             const response = await aiProvider.complete(messages, {
                 model: currentModel,
