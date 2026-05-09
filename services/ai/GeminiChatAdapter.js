@@ -131,53 +131,69 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         if (geminiTools) config.tools = geminiTools;
 
 
-        try {
-            console.log(`[GeminiAdapter] Sending request to model: ${model}`);
-            const response = await this.client.models.generateContent({
-                model,
-                contents,
-                config
-            });
-            console.log(`[GeminiAdapter] Response received.`);
+        const MAX_RETRIES = 3;
+        let lastError;
 
-            // Extract content from response
-            const text = response.text || '';
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                console.log(`[GeminiAdapter] Sending request to model: ${model}${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+                const response = await this.client.models.generateContent({
+                    model,
+                    contents,
+                    config
+                });
+                console.log(`[GeminiAdapter] Response received.`);
 
-            // Extract function calls if any
-            const toolCalls = [];
-            if (response.candidates?.[0]?.content?.parts) {
-                for (const part of response.candidates[0].content.parts) {
-                    if (part.functionCall) {
-                        toolCalls.push({
-                            id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                            function: {
-                                name: part.functionCall.name,
-                                arguments: JSON.stringify(part.functionCall.args || {})
-                            }
-                        });
+                // Extract content from response
+                const text = response.text || '';
+
+                // Extract function calls if any
+                const toolCalls = [];
+                if (response.candidates?.[0]?.content?.parts) {
+                    for (const part of response.candidates[0].content.parts) {
+                        if (part.functionCall) {
+                            toolCalls.push({
+                                id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                                function: {
+                                    name: part.functionCall.name,
+                                    arguments: JSON.stringify(part.functionCall.args || {})
+                                }
+                            });
+                        }
                     }
                 }
+
+                // Extract usage info
+                const usageMetadata = response.usageMetadata || {};
+                const usage = {
+                    promptTokens: usageMetadata.promptTokenCount || 0,
+                    completionTokens: usageMetadata.candidatesTokenCount || 0,
+                    totalTokens: usageMetadata.totalTokenCount || 0
+                };
+
+                return {
+                    content: text,
+                    toolCalls,
+                    usage,
+                    provider: 'Gemini',
+                    model,
+                    rawResponse: response
+                };
+            } catch (error) {
+                lastError = error;
+                const status = error?.status || error?.httpStatus;
+                // Retry on 500 (internal server error) with exponential backoff
+                if ((status === 500 || error?.message?.includes('"code":500')) && attempt < MAX_RETRIES) {
+                    const delay = attempt * 1500;
+                    console.warn(`[GeminiAdapter] 500 error on attempt ${attempt}, retrying in ${delay}ms...`);
+                    await new Promise(r => setTimeout(r, delay));
+                    continue;
+                }
+                console.error('[GeminiAdapter] Error:', error);
+                throw error;
             }
-
-            // Extract usage info
-            const usageMetadata = response.usageMetadata || {};
-            const usage = {
-                promptTokens: usageMetadata.promptTokenCount || 0,
-                completionTokens: usageMetadata.candidatesTokenCount || 0,
-                totalTokens: usageMetadata.totalTokenCount || 0
-            };
-
-            return {
-                content: text,
-                toolCalls,
-                usage,
-                provider: 'Gemini',
-                model,
-                rawResponse: response
-            };
-        } catch (error) {
-            console.error('[GeminiAdapter] Error:', error);
-            throw error;
         }
+
+        throw lastError;
     }
 }
