@@ -125,8 +125,7 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         const config = {};
         if (temperature !== undefined) config.temperature = temperature;
         if (maxTokens !== undefined) config.maxOutputTokens = maxTokens;
-        if (presencePenalty !== undefined) config.presencePenalty = presencePenalty;
-        if (frequencyPenalty !== undefined) config.frequencyPenalty = frequencyPenalty;
+        // presencePenalty and frequencyPenalty are NOT supported by Gemini/Gemma models
         if (systemInstruction) config.systemInstruction = systemInstruction;
         if (geminiTools) config.tools = geminiTools;
 
