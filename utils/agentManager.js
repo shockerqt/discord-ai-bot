@@ -6,6 +6,7 @@ import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty } from './configStore.js';
+import { getRecentFeedback } from './feedbackStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -14,7 +15,15 @@ const __dirname = dirname(__filename);
 const BASE_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/output_format.md'), 'utf-8');
 
 // Decision agent instructions
-const DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_agent.md'), 'utf-8');
+let DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_agent.md'), 'utf-8');
+
+/**
+ * Reloads the decision agent instructions from disk
+ */
+export function reloadDecisionInstructions() {
+    DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_agent.md'), 'utf-8');
+    console.log('[AgentManager] Decision instructions reloaded from disk.');
+}
 
 /**
  * Get Lumi's full system message (base instructions + personality)
@@ -140,6 +149,19 @@ export function getDecisionSystemMessage() {
     if (tools.length > 0) {
         const toolsDesc = tools.map(t => `- **${t.function.name}**: ${t.function.description}`).join('\n');
         instructions += `\n\n## HERRAMIENTAS ACTIVAS DE LUMI\nLumi tiene acceso a las siguientes herramientas. Si el usuario pide algo relacionado con esto, DEBES marcarlo como RESPONDER:\n${toolsDesc}\n\n`;
+    }
+
+    const recentFeedback = getRecentFeedback(3);
+    if (recentFeedback && recentFeedback.length > 0) {
+        instructions += `\n\n## EJEMPLOS DE CORRECCIONES RECIENTES (IN-CONTEXT LEARNING)\n`;
+        instructions += `A continuación se muestran ejemplos recientes donde el administrador corrigió tus decisiones. Aprende de ellos y ajusta tu criterio:\n\n`;
+        
+        recentFeedback.forEach((fb, index) => {
+            instructions += `### Ejemplo ${index + 1}\n`;
+            instructions += `- **Contexto Evaluado:**\n${fb.context}\n`;
+            instructions += `- **Tu decisión original:** ${fb.type === 'FALSE_POSITIVE' ? 'RESPONDER' : 'IGNORAR'}\n`;
+            instructions += `- **Corrección Humana:** ${fb.humanCorrection}\n\n`;
+        });
     }
 
     return instructions;

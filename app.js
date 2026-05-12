@@ -1,5 +1,12 @@
 import 'dotenv/config';
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 import {
   InteractionType,
   InteractionResponseType,
@@ -17,6 +24,8 @@ import * as debugCommand from './commands/debug.js';
 import * as historyCommand from './commands/history.js';
 import { getActiveChannels, getAllMessages } from './utils/messageStore.js';
 import { getConfig, setDecisionModel } from './utils/configStore.js';
+import { reloadDecisionInstructions } from './utils/agentManager.js';
+import { getLogFilePath } from './utils/feedbackStore.js';
 
 // Create an express app
 const app = express();
@@ -82,6 +91,44 @@ app.patch('/api/config', basicAuth, express.json(), (req, res) => {
   const { decision_model } = req.body;
   if (decision_model !== undefined) setDecisionModel(decision_model);
   res.json(getConfig());
+});
+
+// Prompt API (Protected)
+app.get('/api/prompts/decision', basicAuth, (req, res) => {
+  try {
+    const promptPath = path.join(__dirname, 'prompts', 'decision_agent.md');
+    const content = fs.readFileSync(promptPath, 'utf8');
+    res.json({ content });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read prompt file' });
+  }
+});
+
+app.put('/api/prompts/decision', basicAuth, express.json(), (req, res) => {
+  try {
+    const { content } = req.body;
+    if (typeof content !== 'string') return res.status(400).json({ error: 'Invalid content' });
+    
+    const promptPath = path.join(__dirname, 'prompts', 'decision_agent.md');
+    fs.writeFileSync(promptPath, content, 'utf8');
+    reloadDecisionInstructions();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save prompt file' });
+  }
+});
+
+// Feedback / Decisions Export (Protected)
+app.get('/api/decisions/export', basicAuth, (req, res) => {
+  try {
+    const logPath = getLogFilePath();
+    if (!fs.existsSync(logPath)) {
+      return res.status(404).json({ error: 'No feedback data available yet.' });
+    }
+    res.download(logPath, 'decisions_log.jsonl');
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to export decisions' });
+  }
 });
 
 // Command Registry

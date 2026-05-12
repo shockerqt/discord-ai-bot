@@ -17,7 +17,7 @@ const channelMessages = new Map();
 
 // Track active channels
 const activeChannels = new Set();
-const MAX_MESSAGES = 100; // Aumentado ligeramente ya que ahora no combinamos en almacenamiento
+const MAX_MESSAGES = 30; // Límite reducido para consistencia con recolección de feedback y ahorro de tokens
 
 /**
  * Get all active channel IDs
