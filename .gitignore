@@ -3,3 +3,4 @@ node_modules
 deploy_keys
 config.xml
 .env.production
+bot.log

@@ -518,6 +518,16 @@
                         metaHtml += `<span class="badge">Tokens: ${m.usage.totalTokens}</span>`;
                     }
                 }
+                
+                if (msg.mediaAttachments && msg.mediaAttachments.length > 0) {
+                    msg.mediaAttachments.forEach(media => {
+                        if (media.type === 'youtube') {
+                            metaHtml += `<span class="badge" style="background-color: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3);">📺 YouTube</span>`;
+                        } else if (media.type === 'audio') {
+                            metaHtml += `<span class="badge" style="background-color: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">🎵 Audio</span>`;
+                        }
+                    });
+                }
 
                 const newHTML = `
                     <div class="message-header">
