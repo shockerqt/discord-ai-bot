@@ -42,16 +42,54 @@ function wrapText(text, width = 80) {
     }).join('\n');
 }
 
+// Regex to detect YouTube URLs in message content
+const YOUTUBE_URL_REGEX = /https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)[\w\-]+(?:[?&]\S+)*/gi;
+
+// Supported audio MIME types (Discord voice messages are audio/ogg)
+const AUDIO_MIME_TYPES = new Set([
+    'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/aiff',
+    'audio/aac', 'audio/ogg', 'audio/flac', 'audio/webm',
+]);
+
 export function extractUserMessages(msgs) {
     const now = new Date().toLocaleString('es-ES', { timeZone: 'America/Santiago' });
-    return msgs.map(msg => ({
-        userId: msg.author.id,
-        userName: msg.member?.displayName || msg.author.username,
-        content: msg.content,
-        timestamp: now,
-        messageId: msg.id,
-        replyTo: msg.reference?.messageId || null
-    }));
+    return msgs.map(msg => {
+        const mediaAttachments = [];
+
+        // 1. Detect YouTube URLs in text content
+        const ytMatches = msg.content?.matchAll(YOUTUBE_URL_REGEX);
+        if (ytMatches) {
+            for (const match of ytMatches) {
+                mediaAttachments.push({ type: 'youtube', url: match[0] });
+            }
+        }
+
+        // 2. Detect audio file attachments
+        if (msg.attachments?.size > 0) {
+            for (const [, attachment] of msg.attachments) {
+                const ct = attachment.contentType?.split(';')[0].trim().toLowerCase() || '';
+                if (AUDIO_MIME_TYPES.has(ct)) {
+                    mediaAttachments.push({
+                        type: 'audio',
+                        url: attachment.url,
+                        mimeType: ct,
+                        filename: attachment.name || 'audio',
+                        size: attachment.size || 0,
+                    });
+                }
+            }
+        }
+
+        return {
+            userId: msg.author.id,
+            userName: msg.member?.displayName || msg.author.username,
+            content: msg.content,
+            timestamp: now,
+            messageId: msg.id,
+            replyTo: msg.reference?.messageId || null,
+            mediaAttachments: mediaAttachments.length > 0 ? mediaAttachments : null,
+        };
+    });
 }
 
 // ... (SendDebugAttachment and HandleDebugOutput omitted for brevity if unchanged, but I need to be careful with replace_file_content context matching)

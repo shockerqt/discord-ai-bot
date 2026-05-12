@@ -14,7 +14,7 @@ export class GroqChatAdapter extends ChatCompletionProvider {
      * - tool messages: toolCallId -> tool_call_id
      */
     _transformMessages(messages) {
-        return messages.map(msg => {
+        return this.stripMediaAttachments(messages).map(msg => {
             if (msg.role === 'assistant' && msg.toolCalls?.length > 0) {
                 const { toolCalls, ...rest } = msg;
                 return { ...rest, tool_calls: toolCalls };

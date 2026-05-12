@@ -13,8 +13,9 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
      * Gemini uses 'user' and 'model' roles (not 'assistant').
      * System messages are extracted and passed via systemInstruction config.
      * Tool messages need special handling.
+     * Now async to support downloading audio attachments.
      */
-    _transformMessages(messages) {
+    async _transformMessages(messages) {
         const systemMessages = [];
         const contents = [];
 
@@ -82,14 +83,87 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
                 continue;
             }
 
-            // Regular user message
+            // Regular user message — may include multimedia
+            const parts = [];
+
+            // Text content first
+            if (msg.content) {
+                parts.push({ text: msg.content });
+            }
+
+            // Inject media parts if present
+            if (msg.mediaAttachments?.length > 0) {
+                for (const media of msg.mediaAttachments) {
+                    if (media.type === 'youtube') {
+                        // YouTube: pass URL directly as fileData
+                        parts.push({ fileData: { fileUri: media.url } });
+                        console.log(`[GeminiAdapter] Injecting YouTube part: ${media.url}`);
+
+                    } else if (media.type === 'audio') {
+                        try {
+                            const audioPart = await this._resolveAudioPart(media);
+                            if (audioPart) {
+                                parts.push(audioPart);
+                                console.log(`[GeminiAdapter] Injecting audio part: ${media.filename} (${media.mimeType})`);
+                            }
+                        } catch (err) {
+                            console.error(`[GeminiAdapter] Failed to resolve audio ${media.filename}:`, err.message);
+                            // Graceful degradation: add a text note so Lumi knows
+                            parts.push({ text: `[Audio adjunto: ${media.filename} — no se pudo procesar]` });
+                        }
+                    }
+                }
+            }
+
             contents.push({
                 role: 'user',
-                parts: [{ text: msg.content }]
+                parts: parts.length > 0 ? parts : [{ text: '' }]
             });
         }
 
         return { systemInstruction: systemMessages.join('\n\n'), contents };
+    }
+
+    /**
+     * Resolves an audio media attachment to a Gemini API part.
+     * Uses inlineData for files <=10MB, File API upload for larger ones.
+     * @param {{ url: string, mimeType: string, filename: string, size: number }} media
+     * @returns {Promise<Object>} Gemini part object
+     */
+    async _resolveAudioPart(media) {
+        const INLINE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
+
+        // Fetch audio data from Discord CDN
+        const response = await fetch(media.url);
+        if (!response.ok) throw new Error(`HTTP ${response.status} fetching audio`);
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        if (media.size <= INLINE_THRESHOLD) {
+            // Inline: base64 encode
+            return {
+                inlineData: {
+                    mimeType: media.mimeType,
+                    data: buffer.toString('base64'),
+                }
+            };
+        } else {
+            // File API upload for larger files
+            const { createReadStream } = await import('node:stream');
+            const { Readable } = await import('node:stream');
+            console.log(`[GeminiAdapter] Uploading audio ${media.filename} via File API...`);
+            const blob = new Blob([buffer], { type: media.mimeType });
+            const uploadedFile = await this.client.files.upload({
+                file: blob,
+                config: { mimeType: media.mimeType, displayName: media.filename },
+            });
+            return {
+                fileData: {
+                    fileUri: uploadedFile.uri,
+                    mimeType: uploadedFile.mimeType,
+                }
+            };
+        }
     }
 
     /**
@@ -145,7 +219,7 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
             frequencyPenalty
         } = options;
 
-        const { systemInstruction, contents } = this._transformMessages(messages);
+        const { systemInstruction, contents } = await this._transformMessages(messages);
         const geminiTools = this._transformTools(tools);
 
         const config = {};

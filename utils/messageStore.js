@@ -59,6 +59,7 @@ export function addUserMessages(channelId, userMessages) {
             timestamp: msg.timestamp,
             status: MSG_STATUS.PENDING,
             replyTo: msg.replyTo,
+            mediaAttachments: msg.mediaAttachments || null,
             metadata: {}
         });
     }
@@ -139,6 +140,12 @@ export function getFormattedHistory(channelId) {
             if (msg.replyTo) {
                 line += ` [Replying to: ${msg.replyTo}]`;
             }
+            if (msg.mediaAttachments?.length > 0) {
+                for (const m of msg.mediaAttachments) {
+                    if (m.type === 'youtube') line += ` [YouTube: ${m.url}]`;
+                    else if (m.type === 'audio') line += ` [Audio adjunto: ${m.filename}]`;
+                }
+            }
 
             // Combinar con anterior si es usuario
             if (currentMsg && currentMsg.role === 'user') {
@@ -182,6 +189,12 @@ export function getDecisionHistory(channelId) {
             let line = `[${msg.timestamp}] (MsgID:${msg.id}) ${msg.author}: ${msg.content}`;
             if (msg.replyTo) {
                 line += ` [Replying to: ${msg.replyTo}]`;
+            }
+            if (msg.mediaAttachments?.length > 0) {
+                for (const m of msg.mediaAttachments) {
+                    if (m.type === 'youtube') line += ` [YouTube: ${m.url}]`;
+                    else if (m.type === 'audio') line += ` [Audio adjunto: ${m.filename}]`;
+                }
             }
 
             if (currentMsg && currentMsg.role === 'user') {

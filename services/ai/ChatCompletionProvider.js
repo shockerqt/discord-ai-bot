@@ -12,6 +12,26 @@ export class ChatCompletionProvider {
     }
 
     /**
+     * Strips mediaAttachments from messages, replacing them with text annotations.
+     * Used by providers that don't support multimodal input (Mistral, Groq).
+     * @param {Array<Object>} messages
+     * @returns {Array<Object>}
+     */
+    stripMediaAttachments(messages) {
+        return messages.map(msg => {
+            if (msg.role !== 'user' || !msg.mediaAttachments?.length) return msg;
+            const notes = msg.mediaAttachments.map(m => {
+                if (m.type === 'youtube') return `[El usuario compartió un video de YouTube: ${m.url} — no tengo ojos para verlo con este proveedor de IA]`;
+                if (m.type === 'audio') return `[El usuario adjuntó un audio: ${m.filename} — no tengo orejas para escucharlo con este proveedor de IA]`;
+                return null;
+            }).filter(Boolean);
+            const extra = notes.length > 0 ? '\n' + notes.join('\n') : '';
+            const { mediaAttachments, ...rest } = msg;
+            return { ...rest, content: (msg.content || '') + extra };
+        });
+    }
+
+    /**
      * Sends a chat completion request.
      * @param {Array<Object>} messages - Array of message objects {role, content}
      * @param {Object} options - Options for the request

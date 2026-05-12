@@ -25,7 +25,7 @@ export class MistralChatAdapter extends ChatCompletionProvider {
 
         const request = {
             model: model,
-            messages: messages,
+            messages: this.stripMediaAttachments(messages),
             temperature: temperature,
             maxTokens: maxTokens,
             tools: tools,
