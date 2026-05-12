@@ -99,11 +99,24 @@ export function resolveAssistantMessage(channelId, placeholderId, content) {
     if (msg) {
         msg.content = content;
         msg.status = MSG_STATUS.PROCESSED;
-        // Update timestamp to finish time? Or keep start time? Keep start time preserves order logic.
     } else {
-        // Fallback if not found (should not happen)
         addAssistantMessage(channelId, content);
     }
+}
+
+/**
+ * Actualiza el contenido de un mensaje específico por su ID.
+ * Útil para inyectar contexto procesado asíncronamente (ej. resúmenes de video).
+ */
+export function updateMessageContent(channelId, messageId, newContent) {
+    const messages = getRawMessages(channelId);
+    const msg = messages.find(m => m.id === messageId);
+    if (msg) {
+        msg.content = newContent;
+        console.log(`[MessageStore] Updated content for message ${messageId} in channel ${channelId}`);
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -150,10 +163,22 @@ export function getFormattedHistory(channelId) {
             // Combinar con anterior si es usuario
             if (currentMsg && currentMsg.role === 'user') {
                 currentMsg.content += '\n' + line;
+                // Merge mediaAttachments from consecutive user messages
+                if (msg.mediaAttachments?.length > 0) {
+                    currentMsg.mediaAttachments = [
+                        ...(currentMsg.mediaAttachments || []),
+                        ...msg.mediaAttachments
+                    ];
+                }
             } else {
-                currentMsg = { role: 'user', content: line };
+                currentMsg = {
+                    role: 'user',
+                    content: line,
+                    mediaAttachments: msg.mediaAttachments?.length > 0 ? [...msg.mediaAttachments] : null
+                };
                 history.push(currentMsg);
             }
+
         } else {
             // Assistant message
             if (currentMsg && currentMsg.role === 'user') currentMsg = null; // Break user block

@@ -17,6 +17,8 @@ import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
 import { getConfig, getDecisionModel } from '../utils/configStore.js';
+import { summarizeYouTubeVideo } from '../services/media/mediaProcessor.js';
+import { updateMessageContent } from '../utils/messageStore.js';
 
 // Dynamic provider instantiation takes place locally within agents
 
@@ -42,8 +44,8 @@ function wrapText(text, width = 80) {
     }).join('\n');
 }
 
-// Regex to detect YouTube URLs in message content
-const YOUTUBE_URL_REGEX = /https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)[\w\-]+(?:[?&]\S+)*/gi;
+// Regex to detect YouTube URLs in message content (protocol optional)
+const YOUTUBE_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)[\w\-]+(?:[?&]\S+)*/gi;
 
 // Supported audio MIME types (Discord voice messages are audio/ogg)
 const AUDIO_MIME_TYPES = new Set([
@@ -60,6 +62,7 @@ export function extractUserMessages(msgs) {
         const ytMatches = msg.content?.matchAll(YOUTUBE_URL_REGEX);
         if (ytMatches) {
             for (const match of ytMatches) {
+                console.log(`[MediaDetect] YouTube URL detected: ${match[0]}`);
                 mediaAttachments.push({ type: 'youtube', url: match[0] });
             }
         }
@@ -449,6 +452,43 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = [], options
 }
 
 // ============================================================================
+// BACKGROUND MEDIA PROCESSING
+// ============================================================================
+
+/**
+ * Procesa videos de YouTube en segundo plano.
+ * Avisa al usuario, extrae resumen y lo inyecta en el historial.
+ */
+async function processBackgroundMedia(channel, originalMsg, mediaItem) {
+    const contextId = channel.id;
+    const userName = originalMsg.member?.displayName || originalMsg.author.username;
+
+    try {
+        // 1. Avisar que empezamos
+        const statusMsg = await channel.send(`👀 **Lumi está viendo el video de ${userName}...**\nEsto puede tomar unos segundos.`);
+
+        // 2. Etiqueta temporal en el historial
+        const tempNote = `\n\n[Estado: Lumi está procesando este video en segundo plano. Aún no está listo.]`;
+        const currentMsgContent = originalMsg.content;
+        updateMessageContent(contextId, originalMsg.id, currentMsgContent + tempNote);
+
+        // 3. Procesar con Gemini
+        const summary = await summarizeYouTubeVideo(mediaItem.url);
+
+        // 4. Inyectar resumen real
+        const finalNote = `\n\n[Resumen Automático del Video extraído por el sistema]:\n${summary}`;
+        updateMessageContent(contextId, originalMsg.id, currentMsgContent + finalNote);
+
+        // 5. Avisar que terminó
+        await statusMsg.edit(`✅ **¡Ya terminé de ver el video de ${userName}!**\n¿Qué quieres saber sobre él?`);
+
+    } catch (err) {
+        console.error(`[BackgroundMedia] Error processing video:`, err);
+        // Opcional: avisar del error
+    }
+}
+
+// ============================================================================
 // MAIN ENTRY POINT
 // ============================================================================
 
@@ -479,7 +519,26 @@ export async function handlePassiveMessage(messages) {
             decisionModel: 'Bypass' 
         });
         
-        await triggerLumiResponse(lastMessage.channel, lastMessage, respondIds, { bypassPersonality: true });
+        // --- BACKGROUND MEDIA LOGIC ---
+        // Buscamos si hay videos de YouTube en los mensajes dirigidos a Lumi
+        let hasVideo = false;
+        for (const msgData of unprocessed) {
+            const ytMedia = msgData.mediaAttachments?.find(m => m.type === 'youtube');
+            if (ytMedia) {
+                // Encontrar el objeto de mensaje de Discord correspondiente
+                const discordMsg = msgs.find(m => m.id === msgData.id) || lastMessage;
+                // Lanzar en background (no await!)
+                processBackgroundMedia(lastMessage.channel, discordMsg, ytMedia);
+                hasVideo = true;
+            }
+        }
+
+        // Si hay video, ya enviamos el aviso de "Viendo...", así que no disparamos respuesta de Lumi inmediata
+        // a menos que quieras que TAMBIÉN responda algo extra. 
+        // Según el usuario: "que lumi diga entretanto que lo esta viendo... y luego si se le pregunta responder"
+        if (!hasVideo) {
+            await triggerLumiResponse(lastMessage.channel, lastMessage, respondIds, { bypassPersonality: true });
+        }
         return;
     }
 

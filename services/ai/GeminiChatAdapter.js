@@ -95,10 +95,9 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
             if (msg.mediaAttachments?.length > 0) {
                 for (const media of msg.mediaAttachments) {
                     if (media.type === 'youtube') {
-                        // YouTube: pass URL directly as fileData
-                        parts.push({ fileData: { fileUri: media.url } });
-                        console.log(`[GeminiAdapter] Injecting YouTube part: ${media.url}`);
-
+                        // YouTube: Now handled via background processing + text summary injection.
+                        // We skip multimodal injection here to avoid redundancy and heavy processing in the main loop.
+                        console.log(`[GeminiAdapter] Skipping multimodal YouTube injection for: ${media.url} (using text summary)`);
                     } else if (media.type === 'audio') {
                         try {
                             const audioPart = await this._resolveAudioPart(media);
@@ -289,10 +288,10 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
             } catch (error) {
                 lastError = error;
                 const status = error?.status || error?.httpStatus;
-                // Retry on 500 (internal server error) with exponential backoff
-                if ((status === 500 || error?.message?.includes('"code":500')) && attempt < MAX_RETRIES) {
-                    const delay = attempt * 1500;
-                    console.warn(`[GeminiAdapter] 500 error on attempt ${attempt}, retrying in ${delay}ms...`);
+                // Retry on 500 (internal server error) or 503 (service unavailable/high demand) with exponential backoff
+                if ((status === 500 || status === 503 || error?.message?.includes('"code":500') || error?.message?.includes('"code":503')) && attempt < MAX_RETRIES) {
+                    const delay = attempt * 2000; // Increased delay for 503s
+                    console.warn(`[GeminiAdapter] ${status || 500} error on attempt ${attempt}, retrying in ${delay}ms...`);
                     await new Promise(r => setTimeout(r, delay));
                     continue;
                 }
