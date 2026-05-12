@@ -135,7 +135,10 @@ export function getFormattedHistory(channelId) {
 
     for (const msg of raw) {
         if (msg.role === 'user') {
-            const line = `[${msg.timestamp}] (MsgID:${msg.id}) ${msg.author}: ${msg.content}`;
+            let line = `[${msg.timestamp}] (MsgID:${msg.id}) ${msg.author}: ${msg.content}`;
+            if (msg.replyTo) {
+                line += ` [Replying to: ${msg.replyTo}]`;
+            }
 
             // Combinar con anterior si es usuario
             if (currentMsg && currentMsg.role === 'user') {
