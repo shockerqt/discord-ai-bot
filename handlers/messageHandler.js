@@ -158,10 +158,8 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
         contextContent += `${msg.status}: [${msg.author}] (ID:${msg.id}) "${msg.content}"\n`;
     });
 
-    const FALLBACK_MODELS = ['gemma-4-31b-it', 'gemini-3.1-flash-lite'];
-    const modelsToTry = activeModel !== 'gemini-3.1-flash-lite'
-        ? [activeModel, ...FALLBACK_MODELS.filter(m => m !== activeModel)]
-        : [activeModel, 'gemma-4-31b-it'];
+    const FALLBACK_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemma-3-27b-it'];
+    const modelsToTry = [activeModel, ...FALLBACK_MODELS.filter(m => m !== activeModel)];
 
     for (const modelAttempt of modelsToTry) {
         try {
@@ -252,12 +250,17 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}, opti
     let finalProvider = '';
     let finalModel = '';
 
+    const LUMI_FALLBACK_CHAIN = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+    const primaryModel = context.model || 'gemini-3.1-flash-lite-preview';
+    const lumiModels = [primaryModel, ...LUMI_FALLBACK_CHAIN.filter(m => m !== primaryModel)];
+    let lumiModelIdx = 0;
+
     while (!finished && iterations < MAX_ITERATIONS) {
         iterations++;
 
         try {
-            const currentModel = context.model || 'gemini-3.1-flash-lite';
-            console.log(`[LumiAgent] Iteration ${iterations}. Sending to AI using model: ${currentModel}...`);
+            const currentModel = lumiModels[lumiModelIdx];
+            console.log(`[LumiAgent] Iteration ${iterations}. Sending to AI using model: ${currentModel}${lumiModelIdx > 0 ? ' (fallback)' : ''}...`);
             const response = await aiProvider.complete(messages, {
                 model: currentModel,
                 tools: tools,
@@ -332,8 +335,22 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}, opti
             }
 
         } catch (error) {
+            const status = error?.status || error?.httpStatus;
+            const errMsg = error?.message || '';
+            const isQuotaError = status === 429
+                || errMsg.includes('RESOURCE_EXHAUSTED')
+                || errMsg.includes('"code":429')
+                || errMsg.toLowerCase().includes('quota');
+
+            if (isQuotaError && lumiModelIdx < lumiModels.length - 1) {
+                const nextModel = lumiModels[lumiModelIdx + 1];
+                console.warn(`[LumiAgent] Quota exhausted on ${lumiModels[lumiModelIdx]}, falling back to ${nextModel}`);
+                lumiModelIdx++;
+                iterations--; // retry this iteration with the fallback model
+                continue;
+            }
+
             console.error("Error in Lumi Agent loop:", error);
-            // If error occurs, return what we have or generic error
             return {
                 response: finalContent || '',
                 trace: messages,
