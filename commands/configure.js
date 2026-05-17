@@ -24,12 +24,12 @@ export const data = {
                     description: 'Model name (provider:model)',
                     required: true,
                     choices: [
-                        { name: 'Gemini 3.1 Flash Lite (Google)', value: 'gemini:gemini-3.1-flash-lite' },
-                        { name: 'Gemini 3 Flash (Google)', value: 'gemini:gemini-3-flash' },
+                        { name: 'Gemini 3.1 Flash Lite Preview (Google)', value: 'gemini:gemini-3.1-flash-lite-preview' },
+                        { name: 'Gemini 3 Flash Preview (Google)', value: 'gemini:gemini-3-flash-preview' },
+                        { name: 'Gemini 2.5 Pro (Google)', value: 'gemini:gemini-2.5-pro' },
                         { name: 'Gemini 2.5 Flash (Google)', value: 'gemini:gemini-2.5-flash' },
                         { name: 'Gemini 2.5 Flash Lite (Google)', value: 'gemini:gemini-2.5-flash-lite' },
-                        { name: 'Gemma 4 31B (Google)', value: 'gemini:gemma-4-31b-it' },
-                        { name: 'Gemma 4 26B MoE (Google)', value: 'gemini:gemma-4-26b-a4b-it' },
+                        { name: 'Gemma 3 27B IT (Google)', value: 'gemini:gemma-3-27b-it' },
                         { name: 'Llama 3.3 70B (Groq)', value: 'groq:llama-3.3-70b-versatile' },
                         { name: 'Llama 3.1 8B Instant (Groq)', value: 'groq:llama-3.1-8b-instant' },
                         { name: 'Llama-4 Scout 17B (Groq)', value: 'groq:meta-llama/llama-4-scout-17b-16e-instruct' },
@@ -54,12 +54,11 @@ export const data = {
                     description: 'Model name',
                     required: true,
                     choices: [
-                        { name: 'Gemini 3.1 Flash Lite (Google)', value: 'gemini-3.1-flash-lite' },
-                        { name: 'Gemini 3 Flash (Google)', value: 'gemini-3-flash' },
+                        { name: 'Gemini 3.1 Flash Lite Preview (Google)', value: 'gemini-3.1-flash-lite-preview' },
+                        { name: 'Gemini 3 Flash Preview (Google)', value: 'gemini-3-flash-preview' },
                         { name: 'Gemini 2.5 Flash (Google)', value: 'gemini-2.5-flash' },
                         { name: 'Gemini 2.5 Flash Lite (Google)', value: 'gemini-2.5-flash-lite' },
-                        { name: 'Gemma 4 31B (Google)', value: 'gemma-4-31b-it' },
-                        { name: 'Gemma 4 26B MoE (Google)', value: 'gemma-4-26b-a4b-it' },
+                        { name: 'Gemma 3 27B IT (Google)', value: 'gemma-3-27b-it' },
                         { name: 'Llama 3.3 70B (Groq)', value: 'llama-3.3-70b-versatile' }
                     ]
                 }
