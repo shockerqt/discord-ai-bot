@@ -138,10 +138,13 @@ async function handleDebugOutput(debugMode, channel, lastMessage, contentStr, me
 
 /**
  * Call Decision Agent with binary control (RESPONDER / IGNORAR)
+ * Uses an independent provider fallback chain:
+ *   1. Configured provider + decision_model (e.g. Gemini flash-lite)
+ *   2. Same provider fallbacks
+ *   3. Groq llama-3.1-8b-instant as final safety net (no daily quota)
  */
 async function callDecisionAgent(history, unprocessedMessages, model = null) {
-    const aiProvider = ChatProviderFactory.createProvider();
-    const activeModel = model || getDecisionModel() || aiProvider.decisionModel;
+    const activeModel = model || getDecisionModel();
 
     // Build context
     let contextContent = '';
@@ -159,16 +162,23 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
         contextContent += `${msg.status}: [${msg.author}] (ID:${msg.id}) "${msg.content}"\n`;
     });
 
-    const FALLBACK_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.5-flash'];
-    const modelsToTry = [activeModel, ...FALLBACK_MODELS.filter(m => m !== activeModel)];
+    // Provider-specific fallback chains — always end in Groq as the free-tier safety net
+    const primaryProvider = ChatProviderFactory.createProvider();
+    const groqProvider = ChatProviderFactory.createProvider('groq');
 
-    for (const modelAttempt of modelsToTry) {
+    const modelsToTry = [
+        { provider: primaryProvider, model: activeModel },
+        { provider: groqProvider, model: 'llama-3.1-8b-instant' },
+        { provider: groqProvider, model: 'llama-3.3-70b-versatile' },
+    ];
+
+    for (const attempt of modelsToTry) {
         try {
-            const response = await aiProvider.complete([
+            const response = await attempt.provider.complete([
                 { role: 'system', content: getDecisionSystemMessage() },
                 { role: 'user', content: contextContent }
             ], {
-                model: modelAttempt,
+                model: attempt.model,
                 temperature: 0.1
             });
 
@@ -194,23 +204,24 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
                 }
             }
 
-            if (modelAttempt !== activeModel) {
-                console.warn(`[DecisionAgent] Used fallback model: ${modelAttempt}`);
+            if (attempt.model !== activeModel) {
+                console.warn(`[DecisionAgent] Used fallback: ${attempt.model}`);
             }
 
-            return { decisions, reason, rawResponse: content, contextSent: contextContent, decisionModel: modelAttempt };
+            return { decisions, reason, rawResponse: content, contextSent: contextContent, decisionModel: attempt.model };
 
         } catch (error) {
-            console.error(`Decision agent error with model ${modelAttempt}:`, error.message);
-            if (modelAttempt === modelsToTry[modelsToTry.length - 1]) {
-                // Last model also failed — safe fail
+            const isLast = attempt === modelsToTry[modelsToTry.length - 1];
+            console.error(`[DecisionAgent] Error with model ${attempt.model}:`, error.message);
+            if (isLast) {
                 return {
                     decisions: unprocessedMessages.map(m => ({ id: m.id, action: 'IGNORAR' })),
                     reason: 'Error en agente',
-                    rawResponse: '', contextSent: contextContent, decisionModel: modelAttempt
+                    rawResponse: '', contextSent: contextContent, decisionModel: attempt.model
                 };
             }
-            console.warn(`[DecisionAgent] Primary model failed, trying fallback: ${modelsToTry[modelsToTry.indexOf(modelAttempt) + 1]}`);
+            const next = modelsToTry[modelsToTry.indexOf(attempt) + 1];
+            console.warn(`[DecisionAgent] Falling back to: ${next.model}`);
         }
     }
 }
