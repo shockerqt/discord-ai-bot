@@ -12,7 +12,9 @@
     "start": "node app.js",
     "register": "node commands.js",
     "dev": "nodemon app.js",
-    "ngrok": "node utils/start_ngrok.js"
+    "ngrok": "node utils/start_ngrok.js",
+    "simulate": "node scripts/simulate.js",
+    "test:e2e": "node tests/e2e.js"
   },
   "author": "Shay DeWael",
   "license": "MIT",

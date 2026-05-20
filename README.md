@@ -7,6 +7,8 @@ Un bot de Discord con personalidad propia, potenciado por **Mistral AI**. Lumi e
 - 🤖 **IA Conversacional**: Respuestas inteligentes usando Mistral AI Agents
 - 💬 **Respuestas Pasivas**: Participa naturalmente en conversaciones sin necesidad de comandos
 - 🎭 **Personalidad Única**: Estilo "unhinged AI" con humor seco y dialecto chileno
+- 📈 **Evolución Dinámica de Personalidad**: Capacidad para que Lumi evolucione sus instrucciones basándose en el historial de chat (chistes internos, apodos, dinámicas), inyectándolos dinámicamente y anunciando los cambios en Discord.
+- 🧪 **Framework de Pruebas E2E y Simulador CLI**: Pruebas automatizadas y simulador local interactivo para chatear con Lumi, evaluar herramientas y flujos de evolución sin requerir desplegar el bot.
 - 🎤 **Soporte de Voz**: Capacidad de unirse a canales de voz
 - 🧠 **Memoria Contextual**: Mantiene el contexto de conversaciones por canal
 - 🎲 **Sistema de Modos**: Silencioso, Libre y Activo según el contexto
@@ -59,6 +61,26 @@ Para desarrollo con hot-reload:
 ```bash
 npm run dev
 ```
+
+## 🧪 Pruebas y Simulación Local
+
+Para facilitar las pruebas y el desarrollo del comportamiento de Lumi sin requerir levantar el bot en Discord en vivo, se incluye una robusta suite de desarrollo:
+
+### 🏃 Ejecutar Pruebas E2E Automatizadas
+```bash
+npm run test:e2e
+```
+Esto ejecuta la suite completa que valida la toma de decisiones, el pipeline de gating pasivo, el sistema de cooldowns, y gatilla un ciclo real de evolución conectándose con la API de IA.
+
+### 🎮 Iniciar Simulador Interactivo CLI
+```bash
+npm run simulate
+```
+Esto abre una consola interactiva en la terminal para chatear con el bot. Puedes simular múltiples usuarios (usando el formato `nombre: mensaje`), ver pensamientos internos `<THOUGHT>` de Lumi, su llamado a herramientas de GIFs, y observar la evolución en vivo con trazas detalladas y coloreadas de su procesamiento interno.
+
+Para conocer más a fondo el funcionamiento y configuración del sistema, consulta la documentación dedicada:
+- [Guía de Evolución Dinámica de Personalidad](docs/personality_evolution.md)
+- [Guía del Framework de Testing y Simulador](docs/e2e_testing.md)
 
 ### Configuración de Interacciones
 

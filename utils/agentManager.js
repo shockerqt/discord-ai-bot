@@ -14,6 +14,9 @@ const __dirname = dirname(__filename);
 // Base instructions (output format) - always loaded
 const BASE_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/output_format.md'), 'utf-8');
 
+// Base Lumi character personality instructions
+const LUMI_BASE_INSTRUCTIONS = readFileSync(join(__dirname, '../LUMI_INSTRUCTIONS.md'), 'utf-8');
+
 // Decision agent instructions
 let DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_agent.md'), 'utf-8');
 
@@ -41,9 +44,13 @@ export async function getLumiSystemMessage(context = {}) {
     if (context.bypassPersonality) {
         instructions += `\n\n---\n\nEres Lumi, un asistente virtual de IA útil, directo y conversacional. Fuiste invocada directamente. Responde a las consultas del usuario de manera clara y objetiva, sin usar tu personalidad habitual.`;
     } else {
+        // First inject Lumi's base identity
+        instructions += `\n\n---\n\n${LUMI_BASE_INSTRUCTIONS}`;
+
+        // Then append any custom dynamic evolved personality instructions
         const personality = getPersonality();
-        if (personality) {
-            instructions += `\n\n---\n\n${personality}`;
+        if (personality && personality.trim() !== '') {
+            instructions += `\n\n---\n\n### REGLAS DE EVOLUCIÓN DINÁMICAS (APRENDIDAS EN CHAT):\n${personality}`;
         }
     }
 

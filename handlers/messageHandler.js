@@ -19,6 +19,7 @@ import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messa
 import { getConfig, getDecisionModel } from '../utils/configStore.js';
 import { summarizeYouTubeVideo } from '../services/media/mediaProcessor.js';
 import { updateMessageContent } from '../utils/messageStore.js';
+import { checkAndEvolvePersonality } from '../services/ai/personalityEvolutionService.js';
 
 // Dynamic provider instantiation takes place locally within agents
 
@@ -461,6 +462,11 @@ async function triggerLumiResponse(channel, lastMessage, targetIds = [], options
         }
 
         await handleDebugOutput(debugMode, channel, lastMessage, rawResponse, { usage, provider, model });
+
+        // Trigger personality evolution evaluation in the background (do not await)
+        checkAndEvolvePersonality(channel, history).catch(err => {
+            console.error('[BackgroundEvolution] Error in dynamic personality evolution:', err);
+        });
 
     } catch (error) {
         console.error("Lumi error:", error);
