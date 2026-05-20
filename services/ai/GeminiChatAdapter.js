@@ -71,8 +71,9 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
                     name: msg.name,
                     response: responseData
                 };
-                if (msg.tool_call_id) {
-                    funcRes.id = msg.tool_call_id;
+                const toolCallId = msg.toolCallId || msg.tool_call_id;
+                if (toolCallId) {
+                    funcRes.id = toolCallId;
                 }
                 contents.push({
                     role: 'user',

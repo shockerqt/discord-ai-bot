@@ -51,8 +51,9 @@ export async function execute(args) {
 
         // Pick a random one from the top 5 to vary responses
         const index = Math.floor(Math.random() * data.results.length);
-        const gifUrl = data.results[index].media_formats.gif.url;
-        const itemUrl = data.results[index].itemurl;
+        const result = data.results[index];
+        const gifUrl = result.media_formats?.gif?.url || result.url || result.media_formats?.mediumgif?.url;
+        const itemUrl = result.itemurl || result.url || '';
 
         return JSON.stringify({
             result: gifUrl,
