@@ -159,7 +159,7 @@ async function callDecisionAgent(history, unprocessedMessages, model = null) {
         contextContent += `${msg.status}: [${msg.author}] (ID:${msg.id}) "${msg.content}"\n`;
     });
 
-    const FALLBACK_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemma-3-27b-it'];
+    const FALLBACK_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.5-flash'];
     const modelsToTry = [activeModel, ...FALLBACK_MODELS.filter(m => m !== activeModel)];
 
     for (const modelAttempt of modelsToTry) {
@@ -251,8 +251,8 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}, opti
     let finalProvider = '';
     let finalModel = '';
 
-    const LUMI_FALLBACK_CHAIN = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
-    const primaryModel = context.model || 'gemini-3.1-flash-lite-preview';
+    const LUMI_FALLBACK_CHAIN = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+    const primaryModel = context.model || 'gemini-2.5-flash';
     const lumiModels = [primaryModel, ...LUMI_FALLBACK_CHAIN.filter(m => m !== primaryModel)];
     let lumiModelIdx = 0;
 
