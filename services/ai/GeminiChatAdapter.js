@@ -210,7 +210,7 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
      */
     async complete(messages, options = {}) {
         const {
-            model = 'gemini-2.5-flash',
+            model = 'gemini-3.5-flash',
             temperature,
             maxTokens,
             tools,

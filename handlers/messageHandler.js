@@ -262,8 +262,8 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}, opti
     let finalProvider = '';
     let finalModel = '';
 
-    const LUMI_FALLBACK_CHAIN = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
-    const primaryModel = context.model || 'gemini-2.5-flash';
+    const LUMI_FALLBACK_CHAIN = ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+    const primaryModel = context.model || 'gemini-3.5-flash';
     const lumiModels = [primaryModel, ...LUMI_FALLBACK_CHAIN.filter(m => m !== primaryModel)];
     let lumiModelIdx = 0;
 

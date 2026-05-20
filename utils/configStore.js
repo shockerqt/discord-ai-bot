@@ -12,8 +12,8 @@ const CONFIG_PATH = join(__dirname, '../config.xml');
 // Default values
 const DEFAULT_CONFIG = {
     provider: 'gemini',
-    model: 'gemini-2.5-flash',
-    decision_model: 'gemini-2.5-flash-lite',
+    model: 'gemini-3.5-flash',
+    decision_model: 'gemini-3.1-flash-lite',
     temperature: 0.7,
     presence_penalty: 0,
     frequency_penalty: 0,
