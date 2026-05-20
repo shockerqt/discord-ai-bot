@@ -353,10 +353,15 @@ async function callLumiAgent(historyMessages, targetIds = [], context = {}, opti
                 || errMsg.includes('RESOURCE_EXHAUSTED')
                 || errMsg.includes('"code":429')
                 || errMsg.toLowerCase().includes('quota');
+            const isOverloaded = status === 503
+                || errMsg.includes('"code":503')
+                || errMsg.toLowerCase().includes('high demand')
+                || errMsg.toLowerCase().includes('overloaded');
 
-            if (isQuotaError && lumiModelIdx < lumiModels.length - 1) {
+            if ((isQuotaError || isOverloaded) && lumiModelIdx < lumiModels.length - 1) {
                 const nextModel = lumiModels[lumiModelIdx + 1];
-                console.warn(`[LumiAgent] Quota exhausted on ${lumiModels[lumiModelIdx]}, falling back to ${nextModel}`);
+                const reason = isOverloaded ? 'overloaded (503)' : 'quota exhausted (429)';
+                console.warn(`[LumiAgent] Model ${lumiModels[lumiModelIdx]} ${reason}, falling back to ${nextModel}`);
                 lumiModelIdx++;
                 iterations--; // retry this iteration with the fallback model
                 continue;
