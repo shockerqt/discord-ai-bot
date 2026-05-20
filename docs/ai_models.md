@@ -146,8 +146,10 @@ gemini-3.1-flash-lite-preview → gemini-3-flash-preview → gemini-2.5-flash �
 
 ### Decision Bot (`callDecisionAgent`)
 ```
-[modelo configurado] → gemini-2.5-flash-lite → gemini-2.5-flash → gemma-3-27b-it
+[modelo configurado] → Groq llama-3.1-8b-instant → Groq llama-3.3-70b-versatile
 ```
+> El decision agent **siempre termina en Groq** como safety net, sin importar el provider principal.  
+> Esto evita que la cuota diaria del free tier de Gemini (20 req/día por modelo) bloquee todas las decisiones.
 
 > Para cambiar estas cadenas, editar `handlers/messageHandler.js`:
 > - `LUMI_FALLBACK_CHAIN` (línea ~254)
