@@ -1,7 +1,11 @@
 /**
- * Message Store - Almacena historial de mensajes en memoria con estados
+ * Message Store - Almacena historial de mensajes en memoria con estados y persistencia en disco
  * Gestiona estados PENDING, WAITING, PROCESSED para el Decision Agent
  */
+import fs from 'fs';
+import path from 'path';
+
+const STORE_FILE = path.join('data', 'message_store.json');
 
 // Tipos de estado
 export const MSG_STATUS = {
@@ -18,6 +22,53 @@ const channelMessages = new Map();
 // Track active channels
 const activeChannels = new Set();
 const MAX_MESSAGES = 30; // Límite reducido para consistencia con recolección de feedback y ahorro de tokens
+
+// Cargar datos de disco al iniciar de forma síncrona
+function loadStoreFromDisk() {
+    try {
+        if (fs.existsSync(STORE_FILE)) {
+            const rawData = fs.readFileSync(STORE_FILE, 'utf8');
+            const data = JSON.parse(rawData);
+            
+            if (data.channelMessages) {
+                for (const [key, val] of data.channelMessages) {
+                    channelMessages.set(key, val);
+                }
+            }
+            if (data.activeChannels) {
+                for (const ch of data.activeChannels) {
+                    activeChannels.add(ch);
+                }
+            }
+            console.log(`[MessageStore] Loaded ${channelMessages.size} channels from persistent store.`);
+        }
+    } catch (error) {
+        console.error('[MessageStore] Error loading messages from disk, starting empty:', error);
+    }
+}
+
+// Guardar datos en disco de forma asíncrona
+async function saveStoreToDisk() {
+    try {
+        const dir = path.dirname(STORE_FILE);
+        if (!fs.existsSync(dir)) {
+            await fs.promises.mkdir(dir, { recursive: true });
+        }
+        
+        const data = {
+            channelMessages: Array.from(channelMessages.entries()),
+            activeChannels: Array.from(activeChannels)
+        };
+        
+        await fs.promises.writeFile(STORE_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (error) {
+        console.error('[MessageStore] Error saving messages to disk:', error);
+    }
+}
+
+// Cargar inmediatamente
+loadStoreFromDisk();
+
 
 /**
  * Get all active channel IDs
@@ -69,6 +120,8 @@ export function addUserMessages(channelId, userMessages) {
         const removeCount = messages.length - MAX_MESSAGES;
         messages.splice(0, removeCount);
     }
+    
+    saveStoreToDisk();
 }
 
 /**
@@ -87,6 +140,7 @@ export function addAssistantPlaceholder(channelId) {
         status: MSG_STATUS.GENERATING,
         metadata: {}
     });
+    saveStoreToDisk();
     return id;
 }
 
@@ -99,6 +153,7 @@ export function resolveAssistantMessage(channelId, placeholderId, content) {
     if (msg) {
         msg.content = content;
         msg.status = MSG_STATUS.PROCESSED;
+        saveStoreToDisk();
     } else {
         addAssistantMessage(channelId, content);
     }
@@ -114,6 +169,7 @@ export function updateMessageContent(channelId, messageId, newContent) {
     if (msg) {
         msg.content = newContent;
         console.log(`[MessageStore] Updated content for message ${messageId} in channel ${channelId}`);
+        saveStoreToDisk();
         return true;
     }
     return false;
@@ -134,7 +190,9 @@ export function addAssistantMessage(channelId, content, messageId = null, metada
         status: MSG_STATUS.PROCESSED,
         metadata: metadata || {}
     });
+    saveStoreToDisk();
 }
+
 
 /**
  * Obtiene historial formateado para Mistral API
@@ -271,6 +329,10 @@ export function updateMessageStatus(channelId, messageIds, newStatus, additional
             count++;
         }
     }
+    
+    if (count > 0) {
+        saveStoreToDisk();
+    }
     return count;
 }
 
@@ -279,6 +341,7 @@ export function updateMessageStatus(channelId, messageIds, newStatus, additional
  */
 export function clearMessages(channelId) {
     channelMessages.set(channelId, []);
+    saveStoreToDisk();
 }
 
 /**
