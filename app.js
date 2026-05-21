@@ -22,10 +22,13 @@ import * as pingCommand from './commands/ping.js';
 import * as joinCommand from './commands/join.js';
 import * as debugCommand from './commands/debug.js';
 import * as historyCommand from './commands/history.js';
-import { getActiveChannels, getAllMessages } from './utils/messageStore.js';
-import { getConfig, setDecisionModel } from './utils/configStore.js';
+import * as evolveCommand from './commands/evolve.js';
+import { getActiveChannels, getAllMessages, getFormattedHistory } from './utils/messageStore.js';
+import { getConfig, setDecisionModel, getPersonality, setPersonality } from './utils/configStore.js';
 import { reloadDecisionInstructions } from './utils/agentManager.js';
 import { getLogFilePath } from './utils/feedbackStore.js';
+import { getRecentEvolutions } from './utils/evolutionStore.js';
+import { checkAndEvolvePersonality } from './services/ai/personalityEvolutionService.js';
 
 // Create an express app
 const app = express();
@@ -131,6 +134,66 @@ app.get('/api/decisions/export', basicAuth, (req, res) => {
   }
 });
 
+// ============================================================================
+// EVOLUTION API ENDPOINTS (Protected)
+// ============================================================================
+
+// Get current dynamic rules
+app.get('/api/evolution/active', basicAuth, (req, res) => {
+  res.json({ activeRules: getPersonality() || '' });
+});
+
+// Update dynamic rules manually
+app.put('/api/evolution/active', basicAuth, express.json(), (req, res) => {
+  try {
+    const { activeRules } = req.body;
+    if (typeof activeRules !== 'string') {
+      return res.status(400).json({ error: 'Invalid activeRules content' });
+    }
+    setPersonality(activeRules);
+    res.json({ success: true, activeRules: getPersonality() });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update dynamic personality rules: ' + err.message });
+  }
+});
+
+// Get evolution logs/history
+app.get('/api/evolution/history', basicAuth, (req, res) => {
+  try {
+    const history = getRecentEvolutions(50);
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve evolution history: ' + err.message });
+  }
+});
+
+// Trigger a manual evolution evaluation from the dashboard
+app.post('/api/evolution/trigger', basicAuth, express.json(), async (req, res) => {
+  try {
+    const { channelId } = req.body;
+    if (!channelId) {
+      return res.status(400).json({ error: 'channelId is required' });
+    }
+
+    console.log(`[Dashboard API] Manual evolution trigger requested for channel ${channelId}`);
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) {
+      return res.status(404).json({ error: `Channel ${channelId} not found in Discord client` });
+    }
+
+    const history = getFormattedHistory(channelId);
+    if (!history || history.length === 0) {
+      return res.status(400).json({ error: 'No message history available in this channel to evaluate.' });
+    }
+
+    const result = await checkAndEvolvePersonality(channel, history, { force: true });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error(`[Dashboard API] Error triggering evolution:`, err);
+    res.status(500).json({ error: 'Failed to execute evolution check: ' + err.message });
+  }
+});
+
 // Command Registry
 const commands = {
   [resetCommand.data.name]: resetCommand,
@@ -140,6 +203,7 @@ const commands = {
   [joinCommand.data.name]: joinCommand,
   [debugCommand.data.name]: debugCommand,
   [historyCommand.data.name]: historyCommand,
+  [evolveCommand.data.name]: evolveCommand,
 };
 
 /**

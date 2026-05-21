@@ -11,6 +11,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { getPersonality, setPersonality } from '../../utils/configStore.js';
 import { ChatProviderFactory } from './ChatProviderFactory.js';
+import { logEvolution } from '../../utils/evolutionStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -174,12 +175,30 @@ Por favor, responde usando el formato XML exacto de <evolution>...`;
             // 7. Validate output — prevent absurd instructions
             if (newInstructions.length > 3000) {
                 console.warn(`[EvolutionService] New instructions too long (${newInstructions.length} chars). Rejecting evolution.`);
+                logEvolution({
+                    channelId,
+                    channelName: channel.name || 'Direct Message',
+                    guildName: channel.guild?.name || 'DM',
+                    evaluated: true,
+                    evolved: false,
+                    reason: 'Las instrucciones propuestas exceden la longitud permitida (3000 caracteres).',
+                    model: activeModel
+                });
                 return { evaluated: true, evolved: false, reason: 'Instructions too long, rejected' };
             }
 
             // Check for signs the AI copied base instructions into dynamic rules
             if (newInstructions.includes('PERFIL DE PERSONALIDAD HÍBRIDA') || newInstructions.includes('NÚCLEO PSICOLÓGICO')) {
                 console.warn(`[EvolutionService] New instructions contain base profile content. Rejecting evolution.`);
+                logEvolution({
+                    channelId,
+                    channelName: channel.name || 'Direct Message',
+                    guildName: channel.guild?.name || 'DM',
+                    evaluated: true,
+                    evolved: false,
+                    reason: 'Las instrucciones propuestas contienen partes del perfil base inmutable.',
+                    model: activeModel
+                });
                 return { evaluated: true, evolved: false, reason: 'Contains base profile content, rejected' };
             }
 
@@ -201,13 +220,45 @@ Por favor, responde usando el formato XML exacto de <evolution>...`;
                     console.error(`[EvolutionService] Failed to send feedback message to channel:`, sendErr.message);
                 }
             }
+
+            logEvolution({
+                channelId,
+                channelName: channel.name || 'Direct Message',
+                guildName: channel.guild?.name || 'DM',
+                evaluated: true,
+                evolved: true,
+                reason,
+                newInstructions,
+                changeSummary,
+                model: activeModel
+            });
+
             return { evaluated: true, evolved: true, reason, newInstructions, changeSummary };
         }
+
+        logEvolution({
+            channelId,
+            channelName: channel.name || 'Direct Message',
+            guildName: channel.guild?.name || 'DM',
+            evaluated: true,
+            evolved: false,
+            reason,
+            model: activeModel
+        });
 
         return { evaluated: true, evolved: false, reason };
 
     } catch (err) {
         console.error(`[EvolutionService] Error in evaluation:`, err);
+        logEvolution({
+            channelId: channel?.id || 'Unknown',
+            channelName: channel?.name || 'Unknown',
+            guildName: channel?.guild?.name || 'Unknown',
+            evaluated: true,
+            evolved: false,
+            error: err.message,
+            reason: 'Error en la ejecución de la evaluación de evolución'
+        });
         return { evaluated: true, error: err.message };
     }
 }

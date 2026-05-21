@@ -8,6 +8,7 @@ import * as joinCommand from './commands/join.js';
 import * as leaveCommand from './commands/leave.js';
 import * as debugCommand from './commands/debug.js';
 import * as historyCommand from './commands/history.js';
+import * as evolveCommand from './commands/evolve.js';
 
 // Aggregate all commands
 const ALL_COMMANDS = [
@@ -19,6 +20,7 @@ const ALL_COMMANDS = [
   leaveCommand.data,
   debugCommand.data,
   historyCommand.data,
+  evolveCommand.data,
 ];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
