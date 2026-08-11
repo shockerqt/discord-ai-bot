@@ -1,83 +1,86 @@
 /**
- * Agent Manager - Gestiona instrucciones y configuración de los agentes
- * Usando Chat Completions API (no beta agents)
+ * Agent Manager - Ensambla el system prompt y los parámetros del modelo
  */
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty } from './configStore.js';
-import { getRecentFeedback } from './feedbackStore.js';
+import {
+    getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty,
+    getPersona, PERSONAS
+} from './configStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Base instructions (output format) - always loaded
-const BASE_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/output_format.md'), 'utf-8');
+// Formato de salida (XML) - siempre presente
+const OUTPUT_FORMAT = readFileSync(join(__dirname, '../prompts/output_format.md'), 'utf-8');
 
-// Base Lumi character personality instructions
-const LUMI_BASE_INSTRUCTIONS = readFileSync(join(__dirname, '../LUMI_INSTRUCTIONS.md'), 'utf-8');
+// Persona "assistant": bot informativo, sin personaje
+const ASSISTANT_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/assistant.md'), 'utf-8');
 
-// Decision agent instructions
-let DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_agent.md'), 'utf-8');
+// Persona "lumi": personaje completo
+const LUMI_INSTRUCTIONS = readFileSync(join(__dirname, '../LUMI_INSTRUCTIONS.md'), 'utf-8');
 
-/**
- * Reloads the decision agent instructions from disk
- */
-export function reloadDecisionInstructions() {
-    DECISION_INSTRUCTIONS = readFileSync(join(__dirname, '../prompts/decision_agent.md'), 'utf-8');
-    console.log('[AgentManager] Decision instructions reloaded from disk.');
-}
-
-/**
- * Get Lumi's full system message (base instructions + personality)
- */
-// State tracking to prevent infinite fetching for servers with 0 emojis
+// Evita reintentar el fetch de emojis en servidores que no tienen ninguno
 let hasFetchedAppEmojis = false;
 const fetchedGuilds = new Set();
 
 /**
- * Get Lumi's full system message (base instructions + personality + dynamic context)
- * @param {Object} context - Optional context { client, channel, guild }
+ * Construye el system prompt completo.
+ * @param {Object} context - { client, channel, guild, persona }
+ * @returns {Promise<string>}
  */
-export async function getLumiSystemMessage(context = {}) {
-    let instructions = BASE_INSTRUCTIONS;
-    if (context.bypassPersonality) {
-        instructions += `\n\n---\n\nEres Lumi, un asistente virtual de IA útil, directo y conversacional. Fuiste invocada directamente. Responde a las consultas del usuario de manera clara y objetiva, sin usar tu personalidad habitual.`;
-    } else {
-        // First inject Lumi's base identity
-        instructions += `\n\n---\n\n${LUMI_BASE_INSTRUCTIONS}`;
+export async function getSystemMessage(context = {}) {
+    const persona = context.persona || getPersona();
+    const isCharacter = persona === PERSONAS.LUMI;
 
-        // Then append any custom dynamic evolved personality instructions
+    let instructions = OUTPUT_FORMAT;
+
+    if (isCharacter) {
+        instructions += `\n\n---\n\n${LUMI_INSTRUCTIONS}`;
+
         const personality = getPersonality();
         if (personality && personality.trim() !== '') {
-            instructions += `\n\n---\n\n### REGLAS DE EVOLUCIÓN DINÁMICAS (APRENDIDAS EN CHAT):\n${personality}`;
+            instructions += `\n\n---\n\n### REGLAS DE PERSONALIDAD ADICIONALES:\n${personality}`;
         }
+
+        instructions += `\n\n## USO DE HERRAMIENTAS (GIFs)\nTienes acceso a una herramienta de búsqueda de GIFs (gif_tool). Si la conversación es divertida o casual, no dudes en usarla para enviar un meme o GIF. No lo hagas todo el tiempo, solo cuando aporte al momento. IMPORTANTE: No inventes URLs de GIFs; DEBES usar gif_tool para obtener el enlace real.`;
+
+        instructions += await buildEmojiSection(context);
+    } else {
+        instructions += `\n\n---\n\n${ASSISTANT_INSTRUCTIONS}`;
+
+        const personality = getPersonality();
+        if (personality && personality.trim() !== '') {
+            instructions += `\n\n---\n\n### INSTRUCCIONES ADICIONALES DEL ADMINISTRADOR:\n${personality}`;
+        }
+
+        instructions += `\n\n## USO DE HERRAMIENTAS\nTienes herramientas disponibles (dados, búsqueda de GIFs, estado del bot). Úsalas solo cuando el usuario lo pida explícitamente o cuando sean necesarias para responder. No inventes URLs: si envías un GIF, DEBES obtener el enlace con gif_tool.`;
     }
 
-    instructions += `\n\n## USO DE HERRAMIENTAS (GIFs)\nTienes acceso a una herramienta de búsqueda de GIFs (gif_tool). De vez en cuando, si la conversación es divertida, casual, o amerita una reacción visual, ¡no dudes en usarla para enviar un meme o un GIF animado! No lo hagas todo el tiempo, solo cuando aporte al momento. IMPORTANTE: No inventes URLs de Giphy ni envíes links falsos. DEBES usar la herramienta gif_tool para obtener el enlace real.`;
+    return instructions;
+}
 
-    // Dynamic Emoji Injection (Simplified Mapping)
-    // Collect from Guild AND Application
-    const allEmojis = [];
-
-    // Resolve Client
+/**
+ * Lista los emojis personalizados disponibles (servidor + aplicación).
+ * Solo se usa en la persona con personaje, donde los emojis aportan al tono.
+ * @param {Object} context - { client, channel, guild }
+ * @returns {Promise<string>}
+ */
+async function buildEmojiSection(context) {
+    const emojis = [];
     const client = context.client || context.channel?.client;
 
-    // Helper to format emoji for list
-    const formatEmojiForList = (e) => {
-        let label = e.name;
-        if (label.toLowerCase().includes('sappy')) {
-            label += ' (foca)';
-        }
+    const formatEmoji = (emoji) => {
+        let label = emoji.name;
+        if (label.toLowerCase().includes('sappy')) label += ' (foca)';
         return label;
     };
 
-    // 1. App Emojis
-    if (client && client.application) {
-        // App emojis are usually global, but let's check cache first
+    // 1. Emojis de la aplicación
+    if (client?.application) {
         if (client.application.emojis.cache.size === 0 && !hasFetchedAppEmojis) {
             try {
-                console.log('[SystemPrompt] Fetching App Emojis...');
                 await client.application.emojis.fetch();
             } catch (e) {
                 console.error('[SystemPrompt] Failed to fetch app emojis:', e);
@@ -85,99 +88,42 @@ export async function getLumiSystemMessage(context = {}) {
                 hasFetchedAppEmojis = true;
             }
         }
-        const appEmojis = client.application.emojis.cache.map(formatEmojiForList);
-        allEmojis.push(...appEmojis);
-        console.log(`[SystemPrompt] App emojis found: ${appEmojis.length}`);
-    } else {
-        console.log('[SystemPrompt] Client or Application not found in context.');
+        emojis.push(...client.application.emojis.cache.map(formatEmoji));
     }
 
-    // 2. Guild Emojis
-    if (context.guild || (context.channel && context.channel.guild)) {
-        const guild = context.guild || context.channel.guild;
-        console.log(`[SystemPrompt] Injecting emojis for guild: ${guild.name} (${guild.id})`);
-
-        // FORCE FETCH IF CACHE EMPTY AND NOT FETCHED BEFORE
+    // 2. Emojis del servidor
+    const guild = context.guild || context.channel?.guild;
+    if (guild) {
         if (guild.emojis.cache.size === 0 && !fetchedGuilds.has(guild.id)) {
             try {
-                console.log('[SystemPrompt] Guild emoji cache empty. Fetching...');
                 await guild.emojis.fetch();
-                console.log(`[SystemPrompt] Fetched ${guild.emojis.cache.size} emojis.`);
             } catch (e) {
                 console.error('[SystemPrompt] Failed to fetch guild emojis:', e);
             } finally {
                 fetchedGuilds.add(guild.id);
             }
         }
-
-        const guildEmojis = guild.emojis.cache.map(formatEmojiForList);
-        allEmojis.push(...guildEmojis);
-        console.log(`[SystemPrompt] Guild emojis found: ${guildEmojis.length}`);
-    } else {
-        console.log('[SystemPrompt] No guild context available for emojis.');
+        emojis.push(...guild.emojis.cache.map(formatEmoji));
     }
 
-    // Combine and slice
-    const uniqueEmojiList = [...new Set(allEmojis)].slice(0, 100);
+    const uniqueEmojis = [...new Set(emojis)].slice(0, 100);
+    if (uniqueEmojis.length === 0) return '';
 
-    if (uniqueEmojiList.length > 0) {
-        instructions += `\n\n## EMOJIS DISPONIBLES
-Puedes usar tanto emojis estándar (Unicode) como los siguientes emojis personalizados.
-PREFERENCIA: Intenta usar los emojis personalizados cuando encajen.
-NOTA: Los emojis a veces tienen una descripcion entre paréntesis que indica su origen. Por ejemplo, "sappy_love (foca)" significa que es un emoji de foca.
-Puedes poner los emojis en medio del mensaje o puedes mandarlos en un mensaje nuevo si quieres que destaquen.
+    return `\n\n## EMOJIS DISPONIBLES
+Puedes usar emojis estándar (Unicode) y también los personalizados de esta lista.
+NOTA: La descripción entre paréntesis indica el origen del emoji. "sappy_love (foca)" significa que es un emoji de foca.
 
-REGLA DE FORMATO: Solo escribe el nombre del emoji entre dos puntos. 
-Ejemplo: si en la lista dice "523423pepe", tú escribe :523423pepe:. Si dice "23912sappy_love (foca)", escribe :23912sappy_love:.
+REGLA DE FORMATO: Escribe el nombre del emoji entre dos puntos.
+Ejemplo: si la lista dice "523423pepe", escribe :523423pepe:. Si dice "23912sappy_love (foca)", escribe :23912sappy_love:.
 
 LISTA:
-${uniqueEmojiList.join(', ')}`;
-    } else {
-        console.log('[SystemPrompt] No emojis (guild or app) available to inject.');
-    }
-
-    return instructions;
+${uniqueEmojis.join(', ')}`;
 }
 
 /**
- * Get decision agent's system message
+ * Parámetros del modelo configurados por el usuario.
  */
-import { getToolDefinitions } from './tools/registry.js';
-
-// ... (existing imports)
-
-/**
- * Get decision agent's system message
- */
-export function getDecisionSystemMessage() {
-    const tools = getToolDefinitions();
-    let instructions = DECISION_INSTRUCTIONS;
-
-    if (tools.length > 0) {
-        const toolsDesc = tools.map(t => `- **${t.function.name}**: ${t.function.description}`).join('\n');
-        instructions += `\n\n## HERRAMIENTAS ACTIVAS DE LUMI\nLumi tiene acceso a las siguientes herramientas. Si el usuario pide algo relacionado con esto, DEBES marcarlo como RESPONDER:\n${toolsDesc}\n\n`;
-    }
-
-    const recentFeedback = getRecentFeedback(3);
-    if (recentFeedback && recentFeedback.length > 0) {
-        instructions += `\n\n## EJEMPLOS DE CORRECCIONES RECIENTES (IN-CONTEXT LEARNING)\n`;
-        instructions += `A continuación se muestran ejemplos recientes donde el administrador corrigió tus decisiones. Aprende de ellos y ajusta tu criterio:\n\n`;
-        
-        recentFeedback.forEach((fb, index) => {
-            instructions += `### Ejemplo ${index + 1}\n`;
-            instructions += `- **Contexto Evaluado:**\n${fb.context}\n`;
-            instructions += `- **Tu decisión original:** ${fb.type === 'FALSE_POSITIVE' ? 'RESPONDER' : 'IGNORAR'}\n`;
-            instructions += `- **Corrección Humana:** ${fb.humanCorrection}\n\n`;
-        });
-    }
-
-    return instructions;
-}
-
-/**
- * Get Lumi's model parameters
- */
-export function getLumiParams() {
+export function getAgentParams() {
     return {
         temperature: getTemperature(),
         presence_penalty: getPresencePenalty(),
@@ -186,8 +132,8 @@ export function getLumiParams() {
 }
 
 /**
- * Get base instructions (for display in /configure show)
+ * Instrucciones base de formato (para mostrarlas en /configure show)
  */
 export function getBaseInstructions() {
-    return BASE_INSTRUCTIONS;
+    return OUTPUT_FORMAT;
 }

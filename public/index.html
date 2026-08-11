@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,17 +8,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
+            --bg-outer: #0b0d10;
             --bg-dark: #0f1115;
             --bg-panel: #1a1d24;
-            --bg-message-user: #2b313d;
-            --bg-message-bot: #232730;
+            --bg-input: #232730;
             --text-primary: #e2e8f0;
             --text-secondary: #94a3b8;
             --accent: #6366f1;
             --accent-hover: #4f46e5;
             --border: #2e3340;
             --success: #10b981;
-            --warning: #f59e0b;
             --error: #ef4444;
         }
 
@@ -29,453 +29,33 @@
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0b0d10; /* Darker "outer" background */
+            background-color: var(--bg-outer);
             color: var(--text-primary);
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            padding: 20px;
+            min-height: 100vh;
+            padding: 24px 16px 64px;
         }
 
-        .app-container {
-            display: flex;
-            width: 100%;
-            max-width: 1600px;
-            height: 100%;
-            max-height: 95vh;
-            background-color: var(--bg-dark);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
-        }
-
-        .sidebar {
-            width: 320px;
-            background-color: var(--bg-panel);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-
-        .header {
-            padding: 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .header h1 {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: #fff;
-        }
-
-        .channel-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-        }
-
-        .channel-item {
-            padding: 12px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-bottom: 5px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .channel-item:hover, .channel-item.active {
-            background-color: rgba(99, 102, 241, 0.1);
-        }
-        
-        .channel-item.active {
-            border-left: 3px solid var(--accent);
-        }
-
-        .channel-name {
-            font-weight: 500;
-            color: #fff;
-        }
-
-        .channel-guild {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            background-color: var(--bg-dark);
-        }
-
-        .top-bar {
-            height: 65px;
-            padding: 0 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            background-color: var(--bg-panel);
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-
-        .message-container-wrapper {
-            flex: 1;
-            overflow-y: auto;
-            background-color: var(--bg-dark);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .message-container {
-            width: 100%;
-            max-width: 1000px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .message {
-            display: flex;
-            flex-direction: column;
-            max-width: 85%;
-            padding: 15px;
-            border-radius: 10px;
-            animation: fadeIn 0.3s ease-out;
-            position: relative;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message.user {
-            align-self: flex-start;
-            background-color: var(--bg-message-user);
-            border-bottom-left-radius: 2px;
-        }
-
-        .message.assistant {
-            align-self: flex-end;
-            background-color: var(--bg-message-bot);
-            border-bottom-right-radius: 2px;
-            border: 1px solid var(--border);
-        }
-
-        .message-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            align-items: center;
-        }
-
-        .author {
-            font-weight: 600;
-            color: #fff;
-        }
-
-        .content {
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-
-        .metadata {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px dashed var(--border);
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .badge {
-            background-color: rgba(255, 255, 255, 0.05);
-            padding: 3px 8px;
-            border-radius: 4px;
-            border: 1px solid var(--border);
-        }
-
-        .badge.success { color: var(--success); border-color: rgba(16, 185, 129, 0.3); }
-        .badge.warning { color: var(--warning); border-color: rgba(245, 158, 11, 0.3); }
-        
-        .status-badge {
-            font-size: 0.7rem;
-            padding: 2px 6px;
-            border-radius: 10px;
-            text-transform: uppercase;
-            font-weight: 600;
-        }
-
-        .status-PENDING { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
-        .status-WAITING { background: rgba(99, 102, 241, 0.2); color: var(--accent); }
-        .status-PROCESSED { background: rgba(16, 185, 129, 0.2); color: var(--success); }
-        .status-GENERATING { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-
-        .loader {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-        }
-
-        .empty-state {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: var(--text-secondary);
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .empty-state svg {
-            width: 48px;
-            height: 48px;
-            opacity: 0.5;
-        }
-
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-        }
-
-        /* Config Panel */
-        .config-panel {
-            padding: 15px;
-            border-top: 1px solid var(--border);
-            background-color: var(--bg-panel);
-        }
-
-        .config-panel h3 {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-secondary);
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
-
-        .config-row {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-bottom: 10px;
-        }
-
-        .config-label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-        }
-
-        .config-select {
-            background-color: var(--bg-dark);
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 6px 8px;
-            font-size: 0.8rem;
-            font-family: 'Inter', sans-serif;
-            width: 100%;
-            cursor: pointer;
-            outline: none;
-        }
-
-        .config-select:focus {
-            border-color: var(--accent);
-        }
-
-        .config-save-btn {
-            background-color: var(--accent);
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            padding: 7px 14px;
-            font-size: 0.8rem;
-            font-family: 'Inter', sans-serif;
-            cursor: pointer;
-            width: 100%;
-            font-weight: 600;
-            transition: background-color 0.2s;
-        }
-
-        .config-save-btn:hover { background-color: var(--accent-hover); }
-        .config-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .config-status {
-            font-size: 0.72rem;
-            color: var(--success);
-            text-align: center;
-            min-height: 16px;
-            margin-top: 4px;
-        }
-
-        .badge.decision-model { color: #a78bfa; border-color: rgba(167, 139, 250, 0.3); }
-
-        /* Modal Styles */
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .modal {
-            background-color: var(--bg-panel);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            width: 800px;
-            max-width: 95vw;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
-        }
-
-        .modal-header {
-            padding: 15px 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: 600;
-        }
-
-        .modal-body {
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .modal-textarea {
-            width: 100%;
-            height: 400px;
-            background-color: var(--bg-dark);
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 15px;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 0.85rem;
-            resize: vertical;
-            outline: none;
-            line-height: 1.5;
-        }
-
-        .modal-textarea:focus {
-            border-color: var(--accent);
-        }
-
-        .modal-footer {
-            padding: 15px 20px;
-            border-top: 1px solid var(--border);
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-
-        .btn-secondary {
-            background-color: transparent;
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 7px 14px;
-            cursor: pointer;
-            font-family: 'Inter', sans-serif;
-            font-weight: 500;
-        }
-        .btn-secondary:hover { background-color: rgba(255, 255, 255, 0.05); }
-
-        /* Evolution Tab Styles */
-        .tabs-bar {
-            display: flex;
-            background-color: var(--bg-panel);
-            border-bottom: 1px solid var(--border);
-            padding: 0 10px;
-            gap: 5px;
-        }
-
-        .tab-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            padding: 12px 20px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-            font-family: 'Inter', sans-serif;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            outline: none;
-        }
-
-        .tab-btn:hover {
-            color: #fff;
-            background-color: rgba(255, 255, 255, 0.02);
-        }
-
-        .tab-btn.active {
-            color: var(--accent);
-            border-bottom-color: var(--accent);
-            font-weight: 600;
-        }
-
-        .evolution-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 30px;
-            display: flex;
-            flex-direction: column;
-            gap: 25px;
-            max-width: 1200px;
-            width: 100%;
+        .app {
+            max-width: 860px;
             margin: 0 auto;
         }
 
-        .evolution-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
-            width: 100%;
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
         }
 
-        @media (max-width: 1024px) {
-            .evolution-grid {
-                grid-template-columns: 1fr;
-            }
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 24px;
         }
 
         .card {
@@ -483,812 +63,339 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .card .hint {
+            color: var(--text-secondary);
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .field {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 6px;
         }
 
-        .card-title {
-            font-size: 1rem;
-            font-weight: 600;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 12px;
+        label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
 
-        .rules-textarea {
-            width: 100%;
-            height: 250px;
-            background-color: var(--bg-dark);
+        select,
+        input,
+        textarea {
+            background-color: var(--bg-input);
             color: var(--text-primary);
             border: 1px solid var(--border);
             border-radius: 6px;
-            padding: 12px;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 0.85rem;
-            resize: vertical;
-            line-height: 1.5;
-            outline: none;
+            padding: 9px 10px;
+            font-family: inherit;
+            font-size: 14px;
+            width: 100%;
         }
 
-        .rules-textarea:focus {
+        select:focus,
+        input:focus,
+        textarea:focus {
+            outline: none;
             border-color: var(--accent);
         }
 
-        .card-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            align-items: center;
+        textarea {
+            min-height: 220px;
+            resize: vertical;
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
-        .btn-accent {
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 18px;
+            flex-wrap: wrap;
+        }
+
+        button {
             background-color: var(--accent);
             color: #fff;
             border: none;
             border-radius: 6px;
-            padding: 8px 16px;
-            font-size: 0.85rem;
-            font-weight: 600;
+            padding: 9px 16px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
-            transition: background-color 0.2s;
         }
 
-        .btn-accent:hover {
+        button:hover {
             background-color: var(--accent-hover);
         }
 
-        .btn-danger {
-            background-color: transparent;
+        button.secondary {
+            background-color: #374151;
+        }
+
+        button.secondary:hover {
+            background-color: #4b5563;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            font-size: 13px;
+            min-height: 18px;
+        }
+
+        .status.ok {
+            color: var(--success);
+        }
+
+        .status.err {
             color: var(--error);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 6px;
-            padding: 8px 16px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s;
         }
 
-        .btn-danger:hover {
-            background-color: rgba(239, 68, 68, 0.1);
-        }
-
-        .history-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 400px;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-
-        .history-item {
+        .persona-note {
+            margin-top: 14px;
+            padding: 12px;
             background-color: var(--bg-dark);
             border: 1px solid var(--border);
             border-radius: 6px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            transition: border-color 0.2s;
-        }
-
-        .history-item:hover {
-            border-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .history-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.75rem;
+            font-size: 13px;
             color: var(--text-secondary);
-        }
-
-        .history-summary {
-            font-size: 0.85rem;
-            line-height: 1.4;
-            color: var(--text-primary);
-            background-color: rgba(99, 102, 241, 0.05);
-            border-left: 3px solid var(--accent);
-            padding: 10px 12px;
-            border-radius: 0 4px 4px 0;
-            white-space: pre-wrap;
-        }
-
-        .history-reason {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            line-height: 1.4;
-            padding: 4px 0;
-        }
-
-        .badge-evolved {
-            background-color: rgba(16, 185, 129, 0.2);
-            color: var(--success);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
-
-        .badge-skipped {
-            background-color: rgba(245, 158, 11, 0.2);
-            color: var(--warning);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
-
-        .badge-error {
-            background-color: rgba(239, 68, 68, 0.2);
-            color: var(--error);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 600;
+            line-height: 1.5;
         }
     </style>
 </head>
-<body>
 
-    <div class="app-container">
-        <div class="sidebar">
-            <div class="header">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"></path><path d="M15 13v-2"></path><path d="M9 13v-2"></path></svg>
-                <h1>Lumi Dashboard</h1>
-            </div>
-            <div class="channel-list" id="channelList">
-                <div class="loader">Loading channels...</div>
-            </div>
-            <!-- Config Panel -->
-            <div class="config-panel">
-                <h3>⚙️ Decision Agent</h3>
-                <div class="config-row">
-                    <label class="config-label">Model</label>
-                    <select class="config-select" id="decisionModelSelect">
-                        <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Google) ⭐</option>
-                        <option value="gemini-3.5-flash">Gemini 3.5 Flash (Google)</option>
-                        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Google)</option>
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Google)</option>
-                        <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant (Groq) ⚡</option>
-                        <option value="llama-3.3-70b-versatile">Llama 3.3 70B (Groq)</option>
-                        <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama-4 Scout 17B (Groq)</option>
-                        <option value="qwen/qwen3-32b">Qwen 3 32B (Groq)</option>
-                        <option value="mistral-large-latest">Mistral Large</option>
+<body>
+    <div class="app">
+        <div class="header">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)">
+                <path
+                    d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z">
+                </path>
+                <path d="M15 13v-2"></path>
+                <path d="M9 13v-2"></path>
+            </svg>
+            <h1>Lumi Dashboard</h1>
+        </div>
+        <p class="subtitle">
+            Lumi responde solo cuando la mencionan con <strong>@Lumi</strong> (o cuando alguien responde a uno de sus
+            mensajes). El historial se lee de Discord en ese momento, así que no hay memoria que administrar.
+        </p>
+
+        <div class="card">
+            <h2>⚙️ Configuración</h2>
+            <p class="hint">Se guarda en <code>config.xml</code> y aplica de inmediato, sin reiniciar el bot.</p>
+
+            <div class="grid">
+                <div class="field">
+                    <label for="persona">Persona</label>
+                    <select id="persona">
+                        <option value="assistant">Asistente informativo (neutro)</option>
+                        <option value="lumi">Personaje Lumi</option>
                     </select>
                 </div>
-                <button class="config-save-btn" id="saveConfigBtn" onclick="saveConfig()">Save Model</button>
-                <div class="config-status" id="configStatus"></div>
-                <div style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px; display: flex; flex-direction: column; gap: 8px;">
-                    <button class="config-save-btn" style="background-color: #4b5563;" onclick="openPromptModal()">✏️ Edit Prompt</button>
-                    <button class="config-save-btn" style="background-color: #10b981;" onclick="exportDecisions()">📥 Export JSONL</button>
+                <div class="field">
+                    <label for="model">Proveedor y modelo</label>
+                    <select id="model">
+                        <option value="gemini:gemini-3.5-flash">Gemini 3.5 Flash (Google)</option>
+                        <option value="gemini:gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Google)</option>
+                        <option value="gemini:gemini-2.5-pro">Gemini 2.5 Pro (Google)</option>
+                        <option value="gemini:gemini-2.5-flash">Gemini 2.5 Flash (Google)</option>
+                        <option value="gemini:gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Google)</option>
+                        <option value="groq:llama-3.3-70b-versatile">Llama 3.3 70B (Groq)</option>
+                        <option value="groq:llama-3.1-8b-instant">Llama 3.1 8B Instant (Groq)</option>
+                        <option value="groq:qwen/qwen3-32b">Qwen 3 32B (Groq)</option>
+                        <option value="mistral:mistral-large-latest">Mistral Large</option>
+                        <option value="mistral:mistral-small-latest">Mistral Small</option>
+                    </select>
                 </div>
+                <div class="field">
+                    <label for="contextLimit">Mensajes de contexto (0-100)</label>
+                    <input type="number" id="contextLimit" min="0" max="100" step="1">
+                </div>
+                <div class="field">
+                    <label for="temperature">Temperature (0-1)</label>
+                    <input type="number" id="temperature" min="0" max="1" step="0.05">
+                </div>
+                <div class="field">
+                    <label for="presencePenalty">Presence penalty (-2 a 2)</label>
+                    <input type="number" id="presencePenalty" min="-2" max="2" step="0.1">
+                </div>
+                <div class="field">
+                    <label for="frequencyPenalty">Frequency penalty (-2 a 2)</label>
+                    <input type="number" id="frequencyPenalty" min="-2" max="2" step="0.1">
+                </div>
+            </div>
+
+            <div class="persona-note" id="personaNote"></div>
+
+            <div class="actions">
+                <button id="saveConfigBtn" onclick="saveConfig()">Guardar configuración</button>
+                <span class="status" id="configStatus"></span>
             </div>
         </div>
 
-        <div class="main-content">
-            <div class="top-bar" id="topBar">
-                Select a channel to view history
-            </div>
-            <div class="tabs-bar">
-                <button class="tab-btn active" id="chatTabBtn" onclick="switchTab('chat')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                    Chat History
-                </button>
-                <button class="tab-btn" id="evolutionTabBtn" onclick="switchTab('evolution')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-                    ✨ Lumi Evolution
-                </button>
-            </div>
-            
-            <!-- Chat Panel -->
-            <div class="message-container-wrapper" id="chatTabPanel" style="display: flex; flex-direction: column; width: 100%; height: 100%;">
-                <div class="message-container-wrapper" id="messageWrapper" style="width: 100%; height: 100%;">
-                    <div class="message-container" id="messageContainer">
-                        <div class="empty-state">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                            <p>No messages selected</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Evolution Panel -->
-            <div class="message-container-wrapper" id="evolutionTabPanel" style="display: none; width: 100%; height: 100%;">
-                <div class="evolution-container">
-                    <div class="evolution-grid">
-                        <!-- Dynamic Rules Card -->
-                        <div class="card">
-                            <div class="card-title">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
-                                Active Dynamic Rules
-                            </div>
-                            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-top: -5px;">
-                                These are the rules that Lumi has dynamically accumulated through chat interactions (stored in config.xml). They are injected along with base instructions.
-                            </p>
-                            <textarea class="rules-textarea" id="dynamicRulesTextarea" placeholder="No dynamic rules learned yet... Type messages or force evolution!"></textarea>
-                            <div class="card-actions">
-                                <div id="rulesStatus" style="flex: 1; font-size: 0.8rem; color: var(--success); display: flex; align-items: center; font-weight: 500;"></div>
-                                <button class="btn-danger" id="clearRulesBtn" onclick="clearActiveRules()">Reset Rules</button>
-                                <button class="btn-accent" id="saveRulesBtn" onclick="saveActiveRules()">Save Rules</button>
-                            </div>
-                        </div>
-
-                        <!-- Manual Trigger Card -->
-                        <div class="card">
-                            <div class="card-title">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--warning)"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
-                                Trigger Personality Evolution
-                            </div>
-                            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-top: -5px;">
-                                Select an active channel and force a personality evolution evaluation. The Evolution Agent will analyze the last 20 messages in that channel.
-                            </p>
-                            <div class="config-row" style="margin-top: 10px;">
-                                <label class="config-label">Target Channel</label>
-                                <select class="config-select" id="evolutionChannelSelect">
-                                    <option value="">-- Select Channel --</option>
-                                </select>
-                            </div>
-                            <button class="config-save-btn" id="triggerEvolutionBtn" style="background-color: var(--accent); margin-top: 10px;" onclick="triggerManualEvolution()">⚡ Force Evolution Check</button>
-                            <div id="triggerResult" style="min-height: 40px; border-radius: 6px; padding: 12px; font-size: 0.8rem; display: none; line-height: 1.4; margin-top: 10px; border: 1px solid transparent;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Evolution History Log -->
-                    <div class="card" style="flex: 1;">
-                        <div class="card-title">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--success)"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                            Evolution Log History
-                        </div>
-                        <div class="history-list" id="evolutionHistoryList">
-                            <div style="text-align: center; color: var(--text-secondary); padding: 20px;">No evolution history recorded yet.</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Edit Prompt Modal -->
-    <div class="modal-overlay" id="promptModal">
-        <div class="modal">
-            <div class="modal-header">
-                <span>Edit Decision Agent Prompt</span>
-                <button class="btn-secondary" style="border: none; padding: 5px;" onclick="closePromptModal()">✕</button>
-            </div>
-            <div class="modal-body">
-                <textarea class="modal-textarea" id="promptTextarea" spellcheck="false">Loading...</textarea>
-            </div>
-            <div class="modal-footer">
-                <div id="modalStatus" style="flex: 1; color: var(--success); font-size: 0.85rem; display: flex; align-items: center;"></div>
-                <button class="btn-secondary" onclick="closePromptModal()">Cancel</button>
-                <button class="config-save-btn" style="width: auto;" onclick="savePrompt()">Save Changes</button>
+        <div class="card">
+            <h2>📝 Instrucciones adicionales</h2>
+            <p class="hint">
+                Texto libre que se añade al system prompt, cualquiera sea la persona activa. Sirve para reglas del
+                servidor, tono o datos que Lumi deba saber siempre. Equivale a <code>/configure personality</code>.
+            </p>
+            <textarea id="personality" placeholder="Ej: Responde siempre en español. El servidor es de un equipo de desarrollo; prioriza respuestas técnicas y breves."></textarea>
+            <div class="actions">
+                <button id="savePersonalityBtn" onclick="savePersonality()">Guardar instrucciones</button>
+                <button class="secondary" onclick="clearPersonality()">Vaciar</button>
+                <span class="status" id="personalityStatus"></span>
             </div>
         </div>
     </div>
 
     <script>
-        let currentInterval = null;
-        let currentChannelId = null;
+        const PERSONA_NOTES = {
+            assistant: 'Persona activa: <strong>asistente informativo</strong>. Responde de forma directa y objetiva, sin el personaje. No usa emojis personalizados ni sugiere GIFs por iniciativa propia.',
+            lumi: 'Persona activa: <strong>personaje Lumi</strong>. Usa LUMI_INSTRUCTIONS.md, los emojis personalizados del servidor y puede mandar GIFs cuando venga al caso.'
+        };
 
-        async function fetchChannels() {
-            try {
-                const res = await fetch('/api/channels');
-                const channels = await res.json();
-                const container = document.getElementById('channelList');
-                
-                if (channels.length === 0) {
-                    container.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); text-align: center;">No active channels</div>';
-                    return;
-                }
+        function setStatus(id, message, ok = true) {
+            const el = document.getElementById(id);
+            el.textContent = message;
+            el.className = 'status ' + (ok ? 'ok' : 'err');
+            if (message) setTimeout(() => { el.textContent = ''; }, 4000);
+        }
 
-                container.innerHTML = '';
-                channels.forEach(ch => {
-                    const el = document.createElement('div');
-                    el.className = `channel-item ${ch.id === currentChannelId ? 'active' : ''}`;
-                    el.onclick = () => loadChannel(ch.id, ch.name, ch.guild);
-                    
-                    el.innerHTML = `
-                        <div class="channel-name">#${ch.name}</div>
-                        <div class="channel-guild">${ch.guild}</div>
-                    `;
-                    container.appendChild(el);
-                });
-            } catch (err) {
-                console.error('Error fetching channels:', err);
+        function updatePersonaNote() {
+            const persona = document.getElementById('persona').value;
+            document.getElementById('personaNote').innerHTML = PERSONA_NOTES[persona] || '';
+        }
+
+        /**
+         * Selecciona un valor en un <select>, agregando la opción si el config
+         * apunta a un modelo que no está en la lista.
+         */
+        function selectValue(select, value, label) {
+            if (!Array.from(select.options).some(o => o.value === value)) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = label || `${value} (personalizado)`;
+                select.appendChild(option);
             }
+            select.value = value;
         }
 
-        async function loadChannel(id, name, guild) {
-            currentChannelId = id;
-            document.getElementById('topBar').textContent = `${guild} > #${name}`;
-            
-            // Highlight selected
-            document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-
-            if (currentInterval) clearInterval(currentInterval);
-            await fetchMessages(id);
-            
-            // Auto refresh every 3 seconds
-            currentInterval = setInterval(() => fetchMessages(id), 3000);
-        }
-
-        async function fetchMessages(id) {
-            try {
-                const res = await fetch(`/api/channels/${id}/messages`);
-                const messages = await res.json();
-                renderMessages(messages);
-            } catch (err) {
-                console.error('Error fetching messages:', err);
-            }
-        }
-
-        function escapeHTML(str) {
-            return str.replace(/[&<>'"]/g, 
-                tag => ({
-                    '&': '&amp;',
-                    '<': '&lt;',
-                    '>': '&gt;',
-                    "'": '&#39;',
-                    '"': '&quot;'
-                }[tag] || tag)
-            );
-        }
-
-        function renderMessages(messages) {
-            const container = document.getElementById('messageContainer');
-            const wrapper = document.getElementById('messageWrapper');
-            
-            // Si estamos cerca del fondo, hacemos auto-scroll después de renderizar
-            const isScrolledToBottom = wrapper.scrollHeight - wrapper.clientHeight <= wrapper.scrollTop + 50;
-
-            if (messages.length === 0) {
-                if (!container.querySelector('.empty-state')) {
-                    container.innerHTML = '<div class="empty-state"><p>No messages in history</p></div>';
-                }
-                return;
-            }
-
-            // Remove empty state if exists
-            const emptyState = container.querySelector('.empty-state');
-            if (emptyState) emptyState.remove();
-
-            // Track current IDs to handle deleted messages (e.g., when /reset is used)
-            const currentIds = new Set(messages.map(m => `msg-${m.id}`));
-            Array.from(container.children).forEach(child => {
-                if (child.id && child.id.startsWith('msg-') && !currentIds.has(child.id)) {
-                    child.remove();
-                }
-            });
-
-            messages.forEach(msg => {
-                // Remove invalid characters for an HTML ID
-                const safeId = `msg-${msg.id.replace(/[^a-zA-Z0-9-_]/g, '')}`;
-                let el = document.getElementById(safeId);
-                
-                if (!el) {
-                    el = document.createElement('div');
-                    el.id = safeId;
-                    el.className = `message ${msg.role}`;
-                    container.appendChild(el);
-                }
-                
-                let metaHtml = '';
-                if (msg.metadata) {
-                    const m = msg.metadata;
-                    if (m.decision) {
-                        const style = m.decision === 'RESPONDER' ? 'success' : 'warning';
-                        metaHtml += `<span class="badge ${style}">Decision: ${m.decision}</span>`;
-                    }
-                    if (m.reason) {
-                        metaHtml += `<span class="badge" title="${escapeHTML(m.reason)}">Reason: ${escapeHTML(m.reason.length > 30 ? m.reason.substring(0,30)+'...' : m.reason)}</span>`;
-                    }
-                    if (m.decisionModel) {
-                        metaHtml += `<span class="badge decision-model">🧠 ${escapeHTML(m.decisionModel)}</span>`;
-                    }
-                    if (m.model) {
-                        metaHtml += `<span class="badge">💬 ${m.model}</span>`;
-                    }
-                    if (m.usage) {
-                        metaHtml += `<span class="badge">Tokens: ${m.usage.totalTokens}</span>`;
-                    }
-                }
-                
-                if (msg.mediaAttachments && msg.mediaAttachments.length > 0) {
-                    msg.mediaAttachments.forEach(media => {
-                        if (media.type === 'youtube') {
-                            metaHtml += `<span class="badge" style="background-color: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3);">📺 YouTube</span>`;
-                        } else if (media.type === 'audio') {
-                            metaHtml += `<span class="badge" style="background-color: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">🎵 Audio</span>`;
-                        }
-                    });
-                }
-
-                const newHTML = `
-                    <div class="message-header">
-                        <span class="author">${escapeHTML(msg.author)}</span>
-                        <div>
-                            <span class="status-badge status-${msg.status}">${msg.status}</span>
-                            <span style="margin-left: 10px;">${msg.timestamp}</span>
-                        </div>
-                    </div>
-                    <div class="content">${escapeHTML(msg.content)}</div>
-                    ${metaHtml ? `<div class="metadata">${metaHtml}</div>` : ''}
-                `;
-
-                // Solo actualizar si el contenido ha cambiado para evitar repintados y parpadeos
-                if (el.innerHTML !== newHTML.trim()) {
-                    el.innerHTML = newHTML.trim();
-                }
-            });
-
-            if (isScrolledToBottom) {
-                wrapper.scrollTop = wrapper.scrollHeight;
-            }
-        }
-
-        // Init
-        fetchChannels();
-        setInterval(fetchChannels, 10000);
-        fetchConfig();
-        setInterval(fetchConfig, 15000);
-
-        async function fetchConfig() {
+        async function loadConfig() {
             try {
                 const res = await fetch('/api/config');
-                if (!res.ok) return;
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const cfg = await res.json();
-                const sel = document.getElementById('decisionModelSelect');
-                if (cfg.decision_model) {
-                    // Select matching option or add a custom one
-                    const existing = Array.from(sel.options).find(o => o.value === cfg.decision_model);
-                    if (existing) {
-                        sel.value = cfg.decision_model;
-                    } else {
-                        const opt = document.createElement('option');
-                        opt.value = cfg.decision_model;
-                        opt.textContent = cfg.decision_model + ' (custom)';
-                        sel.appendChild(opt);
-                        sel.value = cfg.decision_model;
-                    }
-                }
+
+                selectValue(document.getElementById('persona'), cfg.persona);
+                selectValue(document.getElementById('model'), `${cfg.provider}:${cfg.model}`);
+                document.getElementById('contextLimit').value = cfg.context_limit;
+                document.getElementById('temperature').value = cfg.temperature;
+                document.getElementById('presencePenalty').value = cfg.presence_penalty;
+                document.getElementById('frequencyPenalty').value = cfg.frequency_penalty;
+                updatePersonaNote();
             } catch (err) {
-                console.error('Error fetching config:', err);
+                setStatus('configStatus', 'No se pudo cargar la configuración: ' + err.message, false);
             }
         }
 
         async function saveConfig() {
-            const btn = document.getElementById('saveConfigBtn');
-            const status = document.getElementById('configStatus');
-            const model = document.getElementById('decisionModelSelect').value;
-            btn.disabled = true;
-            status.textContent = '';
+            const button = document.getElementById('saveConfigBtn');
+            button.disabled = true;
             try {
+                const [provider, ...modelParts] = document.getElementById('model').value.split(':');
+                const body = {
+                    persona: document.getElementById('persona').value,
+                    provider,
+                    model: modelParts.join(':'),
+                    context_limit: Number(document.getElementById('contextLimit').value),
+                    temperature: Number(document.getElementById('temperature').value),
+                    presence_penalty: Number(document.getElementById('presencePenalty').value),
+                    frequency_penalty: Number(document.getElementById('frequencyPenalty').value),
+                };
+
                 const res = await fetch('/api/config', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ decision_model: model })
+                    body: JSON.stringify(body)
                 });
-                if (res.ok) {
-                    status.textContent = '✅ Saved!';
-                    setTimeout(() => status.textContent = '', 2000);
-                } else {
-                    status.textContent = '❌ Error saving';
-                }
+                if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
+
+                setStatus('configStatus', '✓ Guardado');
+                updatePersonaNote();
             } catch (err) {
-                status.textContent = '❌ Error saving';
+                setStatus('configStatus', 'Error: ' + err.message, false);
+            } finally {
+                button.disabled = false;
             }
-            btn.disabled = false;
         }
 
-        // Modal and Feature Functions
-        async function openPromptModal() {
-            document.getElementById('promptModal').style.display = 'flex';
-            document.getElementById('promptTextarea').value = 'Loading...';
-            document.getElementById('modalStatus').textContent = '';
-            
+        async function loadPersonality() {
             try {
-                const res = await fetch('/api/prompts/decision');
+                const res = await fetch('/api/personality');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
-                document.getElementById('promptTextarea').value = data.content;
+                document.getElementById('personality').value = data.personality || '';
             } catch (err) {
-                document.getElementById('promptTextarea').value = 'Error loading prompt.';
+                setStatus('personalityStatus', 'No se pudo cargar: ' + err.message, false);
             }
         }
 
-        function closePromptModal() {
-            document.getElementById('promptModal').style.display = 'none';
-        }
-
-        async function savePrompt() {
-            const content = document.getElementById('promptTextarea').value;
-            const status = document.getElementById('modalStatus');
-            status.textContent = 'Saving...';
-            status.style.color = 'var(--text-secondary)';
-            
+        async function savePersonality() {
+            const button = document.getElementById('savePersonalityBtn');
+            button.disabled = true;
             try {
-                const res = await fetch('/api/prompts/decision', {
+                const res = await fetch('/api/personality', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content })
+                    body: JSON.stringify({ personality: document.getElementById('personality').value })
                 });
-                
-                if (res.ok) {
-                    status.style.color = 'var(--success)';
-                    status.textContent = '✅ Saved successfully!';
-                    setTimeout(() => closePromptModal(), 1500);
-                } else {
-                    status.style.color = 'var(--error)';
-                    status.textContent = '❌ Error saving.';
-                }
+                if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
+                setStatus('personalityStatus', '✓ Guardado');
             } catch (err) {
-                status.style.color = 'var(--error)';
-                status.textContent = '❌ Error saving.';
+                setStatus('personalityStatus', 'Error: ' + err.message, false);
+            } finally {
+                button.disabled = false;
             }
         }
 
-        // ============================================================================
-        // EVOLUTION TAB FUNCTIONALITY
-        // ============================================================================
-        
-        let activeTab = 'chat';
-        let evolutionRefreshInterval = null;
-
-        function switchTab(tabName) {
-            activeTab = tabName;
-            
-            // Toggle tab buttons
-            document.getElementById('chatTabBtn').classList.toggle('active', tabName === 'chat');
-            document.getElementById('evolutionTabBtn').classList.toggle('active', tabName === 'evolution');
-            
-            // Toggle panels
-            document.getElementById('chatTabPanel').style.display = tabName === 'chat' ? 'flex' : 'none';
-            document.getElementById('evolutionTabPanel').style.display = tabName === 'evolution' ? 'flex' : 'none';
-            
-            if (tabName === 'evolution') {
-                // Load active rules, log history, and dropdown channels
-                fetchActiveRules();
-                fetchEvolutionHistory();
-                populateEvolutionChannels();
-                
-                // Set up polling for evolution history
-                if (!evolutionRefreshInterval) {
-                    evolutionRefreshInterval = setInterval(() => {
-                        if (activeTab === 'evolution') {
-                            fetchEvolutionHistory();
-                        }
-                    }, 5000);
-                }
-            } else {
-                if (evolutionRefreshInterval) {
-                    clearInterval(evolutionRefreshInterval);
-                    evolutionRefreshInterval = null;
-                }
-            }
+        function clearPersonality() {
+            if (!confirm('¿Vaciar las instrucciones adicionales?')) return;
+            document.getElementById('personality').value = '';
+            savePersonality();
         }
 
-        async function fetchActiveRules() {
-            try {
-                const res = await fetch('/api/evolution/active');
-                if (!res.ok) return;
-                const data = await res.json();
-                document.getElementById('dynamicRulesTextarea').value = data.activeRules;
-            } catch (err) {
-                console.error('Error fetching active rules:', err);
-            }
-        }
+        document.getElementById('persona').addEventListener('change', updatePersonaNote);
 
-        async function saveActiveRules() {
-            const btn = document.getElementById('saveRulesBtn');
-            const status = document.getElementById('rulesStatus');
-            const rules = document.getElementById('dynamicRulesTextarea').value;
-            
-            btn.disabled = true;
-            status.textContent = 'Saving...';
-            status.style.color = 'var(--text-secondary)';
-            
-            try {
-                const res = await fetch('/api/evolution/active', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ activeRules: rules })
-                });
-                
-                if (res.ok) {
-                    status.style.color = 'var(--success)';
-                    status.textContent = '✅ Saved successfully!';
-                    setTimeout(() => status.textContent = '', 3000);
-                } else {
-                    status.style.color = 'var(--error)';
-                    status.textContent = '❌ Failed to save';
-                }
-            } catch (err) {
-                status.style.color = 'var(--error)';
-                status.textContent = '❌ Error occurred';
-            }
-            btn.disabled = false;
-        }
-
-        async function clearActiveRules() {
-            if (!confirm('Are you sure you want to clear all dynamic personality rules? Lumi will forget all accumulated memories and dynamic rules!')) {
-                return;
-            }
-            
-            document.getElementById('dynamicRulesTextarea').value = '';
-            await saveActiveRules();
-        }
-
-        async function populateEvolutionChannels() {
-            try {
-                const res = await fetch('/api/channels');
-                if (!res.ok) return;
-                const channels = await res.json();
-                const select = document.getElementById('evolutionChannelSelect');
-                
-                // Clear and add placeholder
-                select.innerHTML = '<option value="">-- Select Channel --</option>';
-                
-                channels.forEach(ch => {
-                    const opt = document.createElement('option');
-                    opt.value = ch.id;
-                    opt.textContent = `${ch.guild} > #${ch.name}`;
-                    select.appendChild(opt);
-                });
-            } catch (err) {
-                console.error('Error populating channels for evolution dropdown:', err);
-            }
-        }
-
-        async function triggerManualEvolution() {
-            const select = document.getElementById('evolutionChannelSelect');
-            const channelId = select.value;
-            if (!channelId) {
-                alert('Please select a target channel first!');
-                return;
-            }
-            
-            const btn = document.getElementById('triggerEvolutionBtn');
-            const resultBox = document.getElementById('triggerResult');
-            
-            btn.disabled = true;
-            btn.textContent = '⏳ Running evolution evaluation...';
-            resultBox.style.display = 'none';
-            resultBox.textContent = '';
-            
-            try {
-                const res = await fetch('/api/evolution/trigger', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ channelId })
-                });
-                
-                const data = await res.json();
-                resultBox.style.display = 'block';
-                
-                if (res.ok && data.success) {
-                    if (data.evolved) {
-                        resultBox.style.backgroundColor = 'rgba(16, 185, 129, 0.15)';
-                        resultBox.style.borderColor = 'var(--success)';
-                        resultBox.style.color = 'var(--success)';
-                        resultBox.innerHTML = `
-                            <strong>✨ Evolution Successful!</strong><br>
-                            Lumi evolved her personality successfully based on the recent chat history!<br>
-                            <strong>Summary:</strong> <em>${data.changeSummary}</em>
-                        `;
-                        // Reload rules and history
-                        fetchActiveRules();
-                        fetchEvolutionHistory();
-                    } else {
-                        resultBox.style.backgroundColor = 'rgba(245, 158, 11, 0.15)';
-                        resultBox.style.borderColor = 'var(--warning)';
-                        resultBox.style.color = 'var(--warning)';
-                        resultBox.innerHTML = `
-                            <strong>ℹ️ Evolution Checked (No Change)</strong><br>
-                            The evolution agent evaluated the channel but determined that no evolution is needed right now.<br>
-                            <strong>Reason:</strong> <em>${data.reason}</em>
-                        `;
-                    }
-                } else {
-                    resultBox.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
-                    resultBox.style.borderColor = 'var(--error)';
-                    resultBox.style.color = 'var(--error)';
-                    resultBox.textContent = '❌ Error triggering evolution: ' + (data.error || 'Unknown error');
-                }
-            } catch (err) {
-                resultBox.style.display = 'block';
-                resultBox.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
-                resultBox.style.borderColor = 'var(--error)';
-                resultBox.style.color = 'var(--error)';
-                resultBox.textContent = '❌ Network error when triggering evolution: ' + err.message;
-            }
-            
-            btn.disabled = false;
-            btn.textContent = '⚡ Force Evolution Check';
-        }
-
-        async function fetchEvolutionHistory() {
-            try {
-                const res = await fetch('/api/evolution/history');
-                if (!res.ok) return;
-                const history = await res.json();
-                renderEvolutionHistory(history);
-            } catch (err) {
-                console.error('Error fetching evolution history:', err);
-            }
-        }
-
-        function renderEvolutionHistory(history) {
-            const list = document.getElementById('evolutionHistoryList');
-            if (history.length === 0) {
-                list.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">No evolution history recorded yet.</div>';
-                return;
-            }
-            
-            list.innerHTML = '';
-            history.forEach(item => {
-                const el = document.createElement('div');
-                el.className = 'history-item';
-                
-                let badgeClass = 'badge-skipped';
-                let badgeText = 'Skipped';
-                if (item.evolved) {
-                    badgeClass = 'badge-evolved';
-                    badgeText = 'Evolved! ✨';
-                } else if (item.error) {
-                    badgeClass = 'badge-error';
-                    badgeText = 'Error ❌';
-                }
-                
-                const formattedDate = new Date(item.timestamp).toLocaleString();
-                const sourceInfo = item.guildName ? `${item.guildName} > #${item.channelName}` : 'Unknown Channel';
-                const modelText = item.model ? `brain: ${item.model}` : '';
-                
-                let rulesHtml = '';
-                if (item.evolved && item.newInstructions) {
-                    rulesHtml = `
-                        <details style="margin-top: 10px; font-size: 0.8rem; cursor: pointer;">
-                            <summary style="color: var(--accent); outline: none;">Show New Dynamic Rules</summary>
-                            <pre style="margin-top: 8px; padding: 10px; background-color: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; overflow-x: auto; color: var(--text-primary); font-family: monospace; font-size: 0.78rem; text-align: left; line-height: 1.4; white-space: pre-wrap;">${escapeHTML(item.newInstructions)}</pre>
-                        </details>
-                    `;
-                }
-                
-                el.innerHTML = `
-                    <div class="history-meta">
-                        <div>
-                            <span class="${badgeClass}">${badgeText}</span>
-                            <span style="margin-left: 8px; font-weight: 500; color: #fff;">${escapeHTML(sourceInfo)}</span>
-                        </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary);">
-                            ${modelText ? `<span style="margin-right: 10px;">${escapeHTML(modelText)}</span>` : ''}
-                            <span>${formattedDate}</span>
-                        </div>
-                    </div>
-                    <div class="history-reason">
-                        <strong>Reason:</strong> ${escapeHTML(item.reason || item.error || 'N/A')}
-                    </div>
-                    ${item.evolved && item.changeSummary ? `<div class="history-summary">${escapeHTML(item.changeSummary)}</div>` : ''}
-                    ${rulesHtml}
-                `;
-                
-                list.appendChild(el);
-            });
-        }
-
-        function exportDecisions() {
-            // Simple navigation to trigger download
-            window.location.href = '/api/decisions/export';
-        }
+        loadConfig();
+        loadPersonality();
     </script>
 </body>
+
 </html>

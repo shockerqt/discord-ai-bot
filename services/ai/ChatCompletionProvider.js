@@ -7,8 +7,6 @@ export class ChatCompletionProvider {
      */
     constructor(config) {
         this.config = config;
-        /** Default model for the decision agent. Override in subclasses. */
-        this.decisionModel = 'ministral-14b-latest';
     }
 
     /**

@@ -1,7 +1,8 @@
 import { InteractionResponseType } from 'discord-interactions';
 import {
-    getConfig, getPersonality, getTemperature, getPresencePenalty, getFrequencyPenalty, getProvider, getDecisionModel,
-    setPersonality, setTemperature, setPresencePenalty, setFrequencyPenalty, setModel, setProvider, setDecisionModel
+    getConfig, getPersonality,
+    setPersonality, setTemperature, setPresencePenalty, setFrequencyPenalty, setModel, setProvider,
+    setPersona, setContextLimit, PERSONAS
 } from '../utils/configStore.js';
 
 export const data = {
@@ -44,23 +45,34 @@ export const data = {
             ]
         },
         {
-            name: 'decision_model',
-            description: 'Set the AI model to use for the Decision Agent',
+            name: 'persona',
+            description: 'Switch between neutral assistant and the Lumi character',
             type: 1, // SUB_COMMAND
             options: [
                 {
                     type: 3, // STRING
-                    name: 'name',
-                    description: 'Model name',
+                    name: 'mode',
+                    description: 'Response style',
                     required: true,
                     choices: [
-                        { name: 'Gemini 3.1 Flash Lite Preview (Google)', value: 'gemini-3.1-flash-lite-preview' },
-                        { name: 'Gemini 3 Flash Preview (Google)', value: 'gemini-3-flash-preview' },
-                        { name: 'Gemini 2.5 Flash (Google)', value: 'gemini-2.5-flash' },
-                        { name: 'Gemini 2.5 Flash Lite (Google)', value: 'gemini-2.5-flash-lite' },
-                        { name: 'Gemma 3 27B IT (Google)', value: 'gemma-3-27b-it' },
-                        { name: 'Llama 3.3 70B (Groq)', value: 'llama-3.3-70b-versatile' }
+                        { name: 'Asistente informativo (neutro)', value: PERSONAS.ASSISTANT },
+                        { name: 'Personaje Lumi', value: PERSONAS.LUMI }
                     ]
+                }
+            ]
+        },
+        {
+            name: 'context_limit',
+            description: 'How many previous channel messages to read as context (0-100)',
+            type: 1, // SUB_COMMAND
+            options: [
+                {
+                    type: 4, // INTEGER
+                    name: 'value',
+                    description: 'Number of messages',
+                    required: true,
+                    min_value: 0,
+                    max_value: 100,
                 }
             ]
         },
@@ -158,14 +170,13 @@ export async function execute(req, res) {
 
         // SHOW
         if (subCommand === 'show') {
-            const cfg = getConfig();
-            const personalityBuffer = Buffer.from('\uFEFF' + (cfg.personality || '(No custom personality set)'), 'utf-8');
+            const personalityBuffer = Buffer.from('\uFEFF' + (getPersonality() || '(No custom personality set)'), 'utf-8');
 
             const channel = await discordClient.channels.fetch(channel_id);
             if (!channel) throw new Error("Channel not found.");
 
             await channel.send({
-                content: `ℹ️ **Current Configuration**\n\n**AI Provider:** \`${cfg.provider}\`\n**Lumi Model:** \`${cfg.model}\`\n**Decision Model:** \`${cfg.decision_model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
+                content: `ℹ️ **Current Configuration**\n\n${formatConfig()}\n\n📄 **Personality:** Ver archivo adjunto`,
                 files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
             });
 
@@ -197,10 +208,18 @@ export async function execute(req, res) {
             return;
         }
 
-        // DECISION MODEL
-        if (subCommand === 'decision_model') {
-            const nameOption = subOptions.find(o => o.name === 'name');
-            setDecisionModel(nameOption.value);
+        // PERSONA
+        if (subCommand === 'persona') {
+            const modeOption = subOptions.find(o => o.name === 'mode');
+            setPersona(modeOption.value);
+            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            return;
+        }
+
+        // CONTEXT LIMIT
+        if (subCommand === 'context_limit') {
+            const valueOption = subOptions.find(o => o.name === 'value');
+            setContextLimit(valueOption.value);
             await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
             return;
         }
@@ -273,15 +292,33 @@ export async function execute(req, res) {
     }
 }
 
-async function sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest) {
+/**
+ * Resumen legible de la configuración actual.
+ */
+function formatConfig() {
     const cfg = getConfig();
-    const personalityBuffer = Buffer.from('\uFEFF' + (cfg.personality || '(empty)'), 'utf-8');
+    const personaLabel = cfg.persona === PERSONAS.LUMI
+        ? 'Personaje Lumi'
+        : 'Asistente informativo (neutro)';
+    return [
+        `**Persona:** ${personaLabel}`,
+        `**AI Provider:** \`${cfg.provider}\``,
+        `**Model:** \`${cfg.model}\``,
+        `**Mensajes de contexto:** ${cfg.context_limit}`,
+        `**Temperature:** ${cfg.temperature}`,
+        `**Presence Penalty:** ${cfg.presence_penalty}`,
+        `**Frequency Penalty:** ${cfg.frequency_penalty}`,
+    ].join('\n');
+}
+
+async function sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest) {
+    const personalityBuffer = Buffer.from('\uFEFF' + (getPersonality() || '(empty)'), 'utf-8');
 
     const channel = await discordClient.channels.fetch(channel_id);
     if (!channel) throw new Error("Channel not found.");
 
     await channel.send({
-        content: `✅ **Configuration Updated!**\n\n**AI Provider:** \`${cfg.provider}\`\n**Lumi Model:** \`${cfg.model}\`\n**Decision Model:** \`${cfg.decision_model}\`\n**Temperature:** ${cfg.temperature}\n**Presence Penalty:** ${cfg.presence_penalty}\n**Frequency Penalty:** ${cfg.frequency_penalty}\n\n📄 **Personality:** Ver archivo adjunto`,
+        content: `✅ **Configuration Updated!**\n\n${formatConfig()}\n\n📄 **Personality:** Ver archivo adjunto`,
         files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
     });
 

@@ -6,15 +6,16 @@ Guía de referencia para cambiar el proveedor y modelo que usa el bot.
 
 ## Arquitectura de providers
 
-El bot usa dos agentes con modelos independientes:
+El bot usa **un solo agente**: responde cuando lo mencionan. El modelo se configura con `<model>` y
+el proveedor con `<provider>`.
 
-| Agente | Rol | Config key |
-|--------|-----|------------|
-| **Lumi** | Agente principal que genera respuestas | `<model>` |
-| **Decision Bot** | Decide si Lumi debe responder o ignorar | `<decision_model>` |
+| Config key | Rol |
+|------------|-----|
+| `<provider>` | `gemini` (recomendado), `groq` (fallback) o `mistral` (legacy) |
+| `<model>` | Modelo que genera las respuestas |
 
-El provider se configura con `<provider>` y aplica a **ambos** agentes.  
-El provider soportado actualmente es **gemini** (recomendado) y **groq** (fallback).
+> Antes existía un segundo agente (`<decision_model>`) que decidía si responder o ignorar cada
+> mensaje del canal. Ya no existe: la mención es la decisión, así que esa clave se eliminó.
 
 ---
 
@@ -25,14 +26,17 @@ El provider soportado actualmente es **gemini** (recomendado) y **groq** (fallba
 ```xml
 <config>
   <provider>gemini</provider>               <!-- gemini | groq | mistral -->
-  <model>gemini-2.5-flash</model>           <!-- Modelo de Lumi -->
-  <decision_model>gemini-2.5-flash-lite</decision_model> <!-- Modelo del Decision Bot -->
+  <model>gemini-2.5-flash</model>           <!-- Modelo que responde -->
   <temperature>0.7</temperature>
+  <persona>assistant</persona>              <!-- assistant | lumi -->
+  <context_limit>20</context_limit>         <!-- Mensajes previos leídos como contexto -->
   ...
 </config>
 ```
 
-Luego reiniciar el bot (`pm2 restart zavier-sama`).
+`configStore` reescribe el archivo en cada cambio, así que también se puede editar desde
+`/configure` o el dashboard sin reiniciar. Si editas el archivo a mano, reinicia el bot
+(`pm2 restart zavier-sama`).
 
 ### Opción 2: Variables de entorno
 
@@ -51,7 +55,7 @@ CHAT_PROVIDER=gemini   # Solo si no hay config.xml
 > ⚠️ Los modelos con Preview/Experimental pueden tener cuotas de RPM bajas en el free tier.  
 > Si hay errores 429, el bot tiene fallback automático al siguiente modelo de la lista.
 
-#### Modelos recomendados para **Lumi** (`<model>`)
+#### Modelos recomendados (`<model>`)
 
 | Modelo | Velocidad | Calidad | Multimodal | Notas |
 |--------|-----------|---------|------------|-------|
@@ -64,16 +68,6 @@ CHAT_PROVIDER=gemini   # Solo si no hay config.xml
 > - `gemini-3.1-flash-lite-preview` — preview, cuota muy limitada
 > - `gemini-3-flash-preview` — preview
 
-#### Modelos recomendados para **Decision Bot** (`<decision_model>`)
-
-El decision bot solo necesita clasificar RESPONDER/IGNORAR — priorizar velocidad y costo:
-
-| Modelo | Velocidad | Notas |
-|--------|-----------|-------|
-| `gemini-2.5-flash-lite` | ⚡⚡⚡⚡ | **Recomendado** — Ideal para decisiones binarias |
-| `gemini-2.5-flash` | ⚡⚡⚡ | Buena opción si se quiere más razonamiento |
-| `gemini-2.0-flash-lite` | ⚡⚡⚡⚡ | Alternativa más estable |
-
 ---
 
 ### 🟩 Groq (Llama) — Provider: `groq`
@@ -82,20 +76,13 @@ El decision bot solo necesita clasificar RESPONDER/IGNORAR — priorizar velocid
 
 Groq es extremadamente rápido y tiene un free tier generoso. No soporta multimodal (audio, imágenes).
 
-#### Modelos recomendados para **Lumi** (`<model>`)
+#### Modelos recomendados (`<model>`)
 
 | Modelo | Velocidad | Calidad | Notas |
 |--------|-----------|---------|-------|
 | `llama-3.3-70b-versatile` | ⚡⚡⚡ | ⭐⭐⭐⭐ | **Recomendado** — Mejor balance |
 | `llama-3.1-70b-versatile` | ⚡⚡⚡ | ⭐⭐⭐⭐ | Alternativa estable |
 | `llama3-70b-8192` | ⚡⚡⚡ | ⭐⭐⭐ | Contexto más corto |
-
-#### Modelos recomendados para **Decision Bot** (`<decision_model>`)
-
-| Modelo | Velocidad | Notas |
-|--------|-----------|-------|
-| `llama-3.1-8b-instant` | ⚡⚡⚡⚡⚡ | **Recomendado** — Ultra rápido, ideal para decisiones |
-| `llama3-8b-8192` | ⚡⚡⚡⚡⚡ | Alternativa |
 
 ---
 
@@ -114,7 +101,6 @@ Opción legacy, menos mantenida en el bot. No recomendada para uso principal.
 ```xml
 <provider>gemini</provider>
 <model>gemini-2.5-flash</model>
-<decision_model>gemini-2.5-flash-lite</decision_model>
 ```
 
 ### Fallback sin cuota Gemini — Groq
@@ -122,7 +108,6 @@ Opción legacy, menos mantenida en el bot. No recomendada para uso principal.
 ```xml
 <provider>groq</provider>
 <model>llama-3.3-70b-versatile</model>
-<decision_model>llama-3.1-8b-instant</decision_model>
 ```
 
 ### Máxima calidad — Gemini Pro
@@ -130,30 +115,21 @@ Opción legacy, menos mantenida en el bot. No recomendada para uso principal.
 ```xml
 <provider>gemini</provider>
 <model>gemini-2.5-pro</model>
-<decision_model>gemini-2.5-flash-lite</decision_model>
 ```
 
 ---
 
 ## Fallback automático
 
-El bot tiene cadenas de fallback hardcodeadas en el código para cuando un modelo falla (error 429, 500, etc.):
+Si el modelo configurado devuelve 429 (cuota agotada) o 503 (saturado), el agente reintenta la
+misma iteración con el siguiente modelo de la cadena:
 
-### Lumi (`callLumiAgent`)
 ```
-gemini-3.1-flash-lite-preview → gemini-3-flash-preview → gemini-2.5-flash → gemini-2.5-flash-lite
+[modelo configurado] → gemini-3.1-flash-lite → gemini-2.5-flash → gemini-2.5-flash-lite
 ```
 
-### Decision Bot (`callDecisionAgent`)
-```
-[modelo configurado] → Groq llama-3.1-8b-instant → Groq llama-3.3-70b-versatile
-```
-> El decision agent **siempre termina en Groq** como safety net, sin importar el provider principal.  
-> Esto evita que la cuota diaria del free tier de Gemini (20 req/día por modelo) bloquee todas las decisiones.
-
-> Para cambiar estas cadenas, editar `handlers/messageHandler.js`:
-> - `LUMI_FALLBACK_CHAIN` (línea ~254)
-> - `FALLBACK_MODELS` en `callDecisionAgent` (línea ~162)
+La cadena está en `FALLBACK_MODELS`, al inicio de `handlers/mentionHandler.js`. El fallback ocurre
+dentro del mismo proveedor: si quieres saltar de proveedor, cambia `<provider>`.
 
 ---
 
@@ -184,4 +160,4 @@ En producción estas viven en `/opt/zavier-sama/.env` en el servidor OCI.
 | [`services/ai/GeminiChatAdapter.js`](../services/ai/GeminiChatAdapter.js) | Adapter para Gemini (soporta audio, multimodal) |
 | [`services/ai/GroqChatAdapter.js`](../services/ai/GroqChatAdapter.js) | Adapter para Groq/Llama |
 | [`utils/configStore.js`](../utils/configStore.js) | Lee/escribe `config.xml`, expone getters/setters |
-| [`handlers/messageHandler.js`](../handlers/messageHandler.js) | Define cadenas de fallback por agente |
+| [`handlers/mentionHandler.js`](../handlers/mentionHandler.js) | Pipeline de respuesta y cadena de fallback de modelos |

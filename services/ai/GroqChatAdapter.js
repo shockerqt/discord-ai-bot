@@ -5,7 +5,6 @@ export class GroqChatAdapter extends ChatCompletionProvider {
     constructor(config) {
         super(config);
         this.client = new Groq({ apiKey: config.apiKey });
-        this.decisionModel = 'llama-3.1-8b-instant';
     }
 
     /**

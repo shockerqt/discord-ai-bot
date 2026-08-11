@@ -12,8 +12,7 @@ export const data = {
             choices: [
                 { name: 'Off - Disable debug', value: 'off' },
                 { name: 'Thoughts - Show AI reasoning only', value: 'thoughts' },
-                { name: 'Decisions - Show Decision Agent output', value: 'decisions' },
-                { name: 'Full - Show input + output', value: 'full' },
+                { name: 'Full - Show prompt, context and output', value: 'full' },
             ],
         },
     ],
@@ -56,8 +55,7 @@ export async function execute(req, res) {
     const modeMessages = {
         off: '🔇 Debug mode **DISABLED** for this channel.',
         thoughts: '💭 Debug mode **THOUGHTS** enabled - Showing AI reasoning only.',
-        decisions: '🧠 Debug mode **DECISIONS** enabled - Showing Decision Agent output.',
-        full: '📋 Debug mode **FULL** enabled - Showing input + output.',
+        full: '📋 Debug mode **FULL** enabled - Showing prompt, context and output.',
     };
 
     let content = modeMessages[mode];

@@ -1,17 +1,18 @@
 # 🌙 Lumi - Discord AI Bot
 
-Un bot de Discord con personalidad propia, potenciado por **Mistral AI**. Lumi es una IA conversacional que participa activamente en chats de Discord con un estilo único "cute but psycho" y jerga chilena.
+Un bot de Discord **informacional**: responde únicamente cuando lo mencionas con `@Lumi` (o cuando respondes a uno de sus mensajes). No lee ni comenta el resto del chat, pero al invocarlo lee los últimos mensajes del canal para entender el contexto.
 
 ## ✨ Características
 
-- 🤖 **IA Conversacional**: Respuestas inteligentes usando Mistral AI Agents
-- 💬 **Respuestas Pasivas**: Participa naturalmente en conversaciones sin necesidad de comandos
-- 🎭 **Personalidad Única**: Estilo "unhinged AI" con humor seco y dialecto chileno
-- 📈 **Evolución Dinámica de Personalidad**: Capacidad para que Lumi evolucione sus instrucciones basándose en el historial de chat (chistes internos, apodos, dinámicas), inyectándolos dinámicamente y anunciando los cambios en Discord.
-- 🧪 **Framework de Pruebas E2E y Simulador CLI**: Pruebas automatizadas y simulador local interactivo para chatear con Lumi, evaluar herramientas y flujos de evolución sin requerir desplegar el bot.
-- 🎤 **Soporte de Voz**: Capacidad de unirse a canales de voz
-- 🧠 **Memoria Contextual**: Mantiene el contexto de conversaciones por canal
-- 🎲 **Sistema de Modos**: Silencioso, Libre y Activo según el contexto
+- 🎯 **Solo por mención**: sin escucha pasiva. Si nadie lo menciona, no hace ninguna llamada a la IA.
+- 🧠 **Contexto al momento**: al ser mencionado lee los últimos N mensajes del canal desde Discord. No guarda historial, así que el contexto siempre está fresco y no hay memoria que administrar.
+- 🎭 **Dos personas**: asistente informativo neutro (por defecto) o el personaje Lumi, conmutables en caliente con `/configure persona`.
+- 🔀 **Multi-proveedor**: Gemini, Groq y Mistral, con fallback automático de modelo si se agota la cuota (429) o el servicio está saturado (503).
+- 🛠️ **Herramientas**: dados, búsqueda de GIFs, emojis y cambio de estado del bot.
+- 🎥 **Multimedia**: resume videos de YouTube y escucha audios adjuntos (con Gemini).
+- 📏 **Respuestas largas**: se dividen en varios mensajes sin truncar y sin romper los bloques de código.
+- 🎤 **Soporte de Voz**: capacidad de unirse a canales de voz.
+- 🧪 **Pruebas offline y simulador CLI**: suite que corre sin credenciales y consola interactiva para chatear localmente.
 
 ## 🚀 Inicio Rápido
 
@@ -19,7 +20,7 @@ Un bot de Discord con personalidad propia, potenciado por **Mistral AI**. Lumi e
 
 - [Node.js](https://nodejs.org/) >= 18.x
 - Una [aplicación de Discord](https://discord.com/developers/applications) configurada
-- API Key de [Mistral AI](https://mistral.ai/)
+- API Key del proveedor de IA que vayas a usar: [Google Gemini](https://ai.google.dev/) (por defecto), [Groq](https://groq.com/) o [Mistral AI](https://mistral.ai/)
 
 ### Instalación
 
@@ -44,8 +45,11 @@ cp .env.sample .env
 APP_ID=tu_app_id
 PUBLIC_KEY=tu_public_key
 DISCORD_TOKEN=tu_bot_token
-MISTRAL_API_KEY=tu_mistral_api_key
+GOOGLE_API_KEY=tu_google_api_key
 ```
+
+> El bot necesita el intent **Message Content** y, en cada canal donde lo uses, permiso de
+> **Read Message History** (así puede leer el contexto al ser mencionado).
 
 5. Registra los slash commands:
 ```bash
@@ -66,21 +70,19 @@ npm run dev
 
 Para facilitar las pruebas y el desarrollo del comportamiento de Lumi sin requerir levantar el bot en Discord en vivo, se incluye una robusta suite de desarrollo:
 
-### 🏃 Ejecutar Pruebas E2E Automatizadas
+### 🏃 Ejecutar Pruebas Automatizadas
 ```bash
 npm run test:e2e
 ```
-Esto ejecuta la suite completa que valida la toma de decisiones, el pipeline de gating pasivo, el sistema de cooldowns, y gatilla un ciclo real de evolución conectándose con la API de IA.
+Corre **sin credenciales**: el proveedor de IA se reemplaza por un doble de prueba. Valida la detección de menciones, la construcción del contexto, el parseo de respuestas, la división de mensajes largos y el pipeline completo (incluyendo tool-calling y fallback de modelo).
 
 ### 🎮 Iniciar Simulador Interactivo CLI
 ```bash
 npm run simulate
 ```
-Esto abre una consola interactiva en la terminal para chatear con el bot. Puedes simular múltiples usuarios (usando el formato `nombre: mensaje`), ver pensamientos internos `<THOUGHT>` de Lumi, su llamado a herramientas de GIFs, y observar la evolución en vivo con trazas detalladas y coloreadas de su procesamiento interno.
+Abre una consola para chatear con el bot contra la IA real, sobre un canal simulado en memoria. Escribe normal para mencionar a Lumi, o `nombre: mensaje` para agregar contexto de otro usuario sin invocarla.
 
-Para conocer más a fondo el funcionamiento y configuración del sistema, consulta la documentación dedicada:
-- [Guía de Evolución Dinámica de Personalidad](docs/personality_evolution.md)
-- [Guía del Framework de Testing y Simulador](docs/e2e_testing.md)
+Para más detalle: [Guía del Framework de Testing y Simulador](docs/e2e_testing.md)
 
 ### Configuración de Interacciones
 
@@ -108,10 +110,12 @@ Durante el despliegue, el archivo `.env` se genera automáticamente. Para config
 - `APP_ID`
 - `DISCORD_TOKEN`
 - `PUBLIC_KEY`
-- `MISTRAL_API_KEY`
-- `GROQ_API_KEY`
-- `TENOR_API_KEY` (Opcional, si usas `gif_tool`)
-- `GOOGLE_API_KEY` (Requerido para la API de Gemini)
+- `GOOGLE_API_KEY` (requerido para Gemini, el proveedor por defecto)
+- `GEMINI_API_KEY` (usado por el resumidor de videos de YouTube)
+- `MISTRAL_API_KEY` (opcional, si usas Mistral)
+- `GROQ_API_KEY` (opcional, si usas Groq)
+- `TENOR_API_KEY` (opcional, si usas `gif_tool`)
+- `DASHBOARD_PASSWORD` (opcional, protege el dashboard)
 
 **Repository Variables:**
 - `DEFAULT_DEBUG_MODE` (Ej: `full`, `thoughts`, `off`)
@@ -122,36 +126,46 @@ Durante el despliegue, el archivo `.env` se genera automáticamente. Para config
 | Comando | Descripción |
 |---------|-------------|
 | `/ping` | Verifica que el bot está funcionando |
-| `/model` | Configura el modelo de IA |
-| `/memory` | Gestiona la memoria del bot |
-| `/configure` | Configura opciones del bot |
-| `/reset` | Reinicia la conversación |
-| `/debug` | Activa/desactiva modo debug |
-| `/history` | Muestra historial de conversación |
-| `/join` | Une al bot a un canal de voz |
+| `/configure show` | Muestra la configuración actual |
+| `/configure persona` | Alterna entre asistente neutro y personaje Lumi |
+| `/configure model` | Configura proveedor y modelo de IA |
+| `/configure context_limit` | Cuántos mensajes previos lee como contexto (0-100) |
+| `/configure personality` | Instrucciones extra para el system prompt |
+| `/configure creativity` | Ajusta la temperatura |
+| `/debug` | Nivel de debug: `off`, `thoughts`, `full` |
+| `/history` | Exporta los mensajes recientes del canal |
+| `/join` / `/leave` | Entra o sale de un canal de voz |
+
+No hay `/reset` ni `/memory`: como no se guarda historial, no hay nada que limpiar.
 
 ## 📁 Estructura del Proyecto
 
 ```
-├── app.js              → Servidor Express y endpoint de interacciones
-├── commands.js         → Registro de slash commands
-├── discordClient.js    → Cliente de Discord.js para Gateway
-├── commands/           → Implementación de cada comando
+├── app.js                    → Servidor Express, interacciones y API del dashboard
+├── commands.js               → Registro de slash commands
+├── discordClient.js          → Cliente Gateway; filtra menciones (isInvocation)
+├── commands/                 → Implementación de cada comando
 │   ├── configure.js
 │   ├── debug.js
 │   ├── history.js
 │   ├── join.js
 │   ├── leave.js
-│   ├── memory.js
-│   ├── model.js
-│   ├── ping.js
-│   └── reset.js
-├── handlers/           → Manejadores de eventos
-│   ├── messageHandler.js
-│   └── message/        → Módulos del message handler
-├── prompts/            → Prompts del sistema
-├── utils/              → Utilidades y helpers
-└── LUMI_INSTRUCTIONS.md → Instrucciones de personalidad
+│   └── ping.js
+├── handlers/
+│   ├── mentionHandler.js     → El pipeline: contexto → agente → respuesta
+│   ├── voiceHandler.js
+│   └── message/              → Envío a Discord y parseo de respuestas
+├── prompts/
+│   ├── output_format.md      → Formato de salida (siempre cargado)
+│   └── assistant.md          → Persona neutra
+├── services/                 → Adaptadores de IA, media y voz
+├── utils/
+│   ├── contextBuilder.js     → Lee el historial desde Discord
+│   ├── configStore.js        → Configuración persistente (config.xml)
+│   ├── agentManager.js       → Ensamblado del system prompt
+│   └── tools/                → Herramientas (dados, GIFs, emojis, estado)
+├── public/index.html         → Dashboard de configuración
+└── LUMI_INSTRUCTIONS.md      → Persona personaje
 ```
 
 ## 🛠️ Tecnologías
@@ -159,6 +173,8 @@ Durante el despliegue, el archivo `.env` se genera automáticamente. Para config
 - **[Express](https://expressjs.com/)** - Servidor HTTP para interacciones
 - **[discord.js](https://discord.js.org/)** - Cliente de Discord para Gateway y voz
 - **[discord-interactions](https://github.com/discord/discord-interactions-js)** - Verificación de interacciones
+- **[@google/genai](https://github.com/googleapis/js-genai)** - SDK de Gemini (proveedor por defecto)
+- **[groq-sdk](https://github.com/groq/groq-typescript)** - SDK de Groq
 - **[@mistralai/mistralai](https://github.com/mistralai/client-js)** - SDK de Mistral AI
 - **[@discordjs/voice](https://discord.js.org/docs/packages/voice)** - Soporte de voz
 

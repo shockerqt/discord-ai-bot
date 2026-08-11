@@ -51,11 +51,75 @@ function replaceEmojiShortcodes(text, guild, client) {
     });
 }
 
+// Límite de caracteres de un mensaje de Discord
+const MAX_MESSAGE_LENGTH = 2000;
+
 /**
- * Envía un mensaje de texto al canal.
+ * Parte un texto en trozos que quepan en un mensaje de Discord.
+ *
+ * Corta por párrafos, luego por líneas y solo como último recurso a mitad de línea,
+ * respetando los bloques de código (```) para no dejarlos abiertos.
+ *
+ * @param {string} text
+ * @param {number} limit
+ * @returns {Array<string>}
+ */
+export function splitMessage(text, limit = MAX_MESSAGE_LENGTH) {
+    if (text.length <= limit) return [text];
+
+    const chunks = [];
+    // Fence abierto: se cierra al final del chunk y se reabre en el siguiente
+    let openFence = null;
+    let current = '';
+
+    // Espacio que hay que dejar libre para cerrar el bloque de código ('\n```')
+    const reserve = () => (openFence ? 4 : 0);
+    const prefix = () => (openFence ? `${openFence}\n` : '');
+
+    const flush = () => {
+        if (current.trim()) {
+            chunks.push(current.trimEnd() + (openFence ? '\n```' : ''));
+        }
+        current = prefix();
+    };
+
+    // Largo máximo que puede tener una línea en un chunk vacío
+    const maxLineLength = () => Math.max(limit - reserve() - prefix().length - 1, 1);
+
+    for (const line of text.split('\n')) {
+        const fence = line.trim().match(/^```(\S*)/);
+
+        // Una línea que no cabe ni en un chunk vacío se trocea a lo bruto
+        const pieces = [];
+        let rest = line;
+        while (rest.length > maxLineLength()) {
+            pieces.push(rest.slice(0, maxLineLength()));
+            rest = rest.slice(maxLineLength());
+        }
+        pieces.push(rest);
+
+        // Si abre un bloque de código, empezar chunk nuevo si no queda espacio útil
+        if (fence && !openFence && current.length + line.length + 60 > limit) flush();
+
+        for (const piece of pieces) {
+            if (current.length + piece.length + 1 + reserve() > limit) flush();
+            current += piece + '\n';
+        }
+
+        if (fence) openFence = openFence ? null : '```' + (fence[1] || '');
+    }
+
+    flush();
+
+    // Descartar chunks vacíos y bloques de código que quedaron sin contenido
+    return chunks.filter(chunk => chunk.trim() && !/^```\S*\s*```$/.test(chunk.trim()));
+}
+
+/**
+ * Envía un mensaje de texto al canal, partiéndolo si excede el límite de Discord.
  * @param {Object} channel - Canal de Discord
  * @param {Object} output - Output parseado del AI
- * @returns {Promise<void>}
+ * @returns {Promise<Object|undefined>} - El último mensaje enviado
  */
 export async function sendTextMessage(channel, output) {
     if (!output.send_text || !output.text_content) {
@@ -67,12 +131,36 @@ export async function sendTextMessage(channel, output) {
 
     let contentToSend = replaceEmojiShortcodes(output.text_content || '', channel.guild, channel.client);
 
-    // Safety truncate if expansion pushed it over 2000 (unlikely but possible)
-    if (contentToSend.length > 2000) {
-        contentToSend = contentToSend.substring(0, 2000);
+    // Respuestas largas: enviar en varios mensajes en vez de truncar la información
+    if (contentToSend.length > MAX_MESSAGE_LENGTH) {
+        const chunks = splitMessage(contentToSend);
+        let lastSent;
+        for (const [index, chunk] of chunks.entries()) {
+            const isLast = index === chunks.length - 1;
+            lastSent = await sendSingleMessage(channel, {
+                ...output,
+                // El adjunto y la cita van solo en el primer/último mensaje que corresponda
+                attachment: isLast ? output.attachment : null,
+                reply_to: index === 0 ? output.reply_to : null,
+            }, chunk);
+        }
+        return lastSent;
     }
 
+    return sendSingleMessage(channel, output, contentToSend);
+}
+
+/**
+ * Envía un único mensaje ya dentro del límite de caracteres.
+ * @param {Object} channel - Canal de Discord
+ * @param {Object} output - Output parseado del AI
+ * @param {string} contentToSend - Texto ya resuelto y acotado
+ * @returns {Promise<Object|undefined>}
+ */
+async function sendSingleMessage(channel, output, contentToSend) {
     const msgOptions = { content: contentToSend };
+    // Link de GIF que no cabe en este mensaje y se envía aparte
+    let gifFollowUp = null;
 
     // Attachments
     if (output.attachment && output.attachment.startsWith('http')) {
@@ -87,12 +175,13 @@ export async function sendTextMessage(channel, output) {
                             
         if (isGifLink) {
             if (!contentToSend.includes(output.attachment)) {
-                contentToSend = (contentToSend + '\n' + output.attachment).trim();
-                // Ensure it's within Discord's 2000-character limit
-                if (contentToSend.length > 2000) {
-                    contentToSend = contentToSend.substring(0, 2000);
+                const combined = (contentToSend + '\n' + output.attachment).trim();
+                if (combined.length <= MAX_MESSAGE_LENGTH) {
+                    msgOptions.content = combined;
+                } else {
+                    // No cabe: se envía en un mensaje aparte para no truncar el texto
+                    gifFollowUp = output.attachment;
                 }
-                msgOptions.content = contentToSend;
             }
         } else {
             msgOptions.files = [output.attachment];
@@ -100,13 +189,16 @@ export async function sendTextMessage(channel, output) {
     }
 
     if (output.reply_to) {
-        // Validate reply_to is a valid ID (digits) logic elsewhere or verify here
-        // If reply_to is "ID1" from prompt placeholder, it might be invalid, but usually parsed.
         msgOptions.reply = { messageReference: output.reply_to };
     }
 
     try {
-        return await channel.send(msgOptions);
+        const sent = await channel.send(msgOptions);
+        if (gifFollowUp) {
+            await channel.send({ content: gifFollowUp }).catch(err =>
+                console.error('Failed to send GIF follow-up:', err));
+        }
+        return sent;
     } catch (sendErr) {
         console.error("Failed to send message:", sendErr);
     }

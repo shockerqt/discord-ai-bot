@@ -1,320 +1,423 @@
 /**
- * E2E Automated Test Suite for Lumi
- * Verifies core pipeline, message decision gating, and personality evolution
+ * Suite de pruebas del pipeline de menciones.
+ *
+ * Corre sin credenciales: el proveedor de IA se reemplaza por un doble de prueba.
+ * Uso: npm run test:e2e
  */
 import 'dotenv/config';
-import { handlePassiveMessage } from '../handlers/messageHandler.js';
-import { checkAndEvolvePersonality } from '../services/ai/personalityEvolutionService.js';
-import { getPersonality, setPersonality } from '../utils/configStore.js';
-import { clearMessages } from '../utils/messageStore.js';
+import assert from 'node:assert/strict';
+import { isInvocation } from '../discordClient.js';
+import { buildConversationContext, extractMedia, stripBotMention } from '../utils/contextBuilder.js';
+import { parseAIResponse } from '../handlers/message/responseParser.js';
+import { splitMessage } from '../handlers/message/messageSender.js';
 import { ChatProviderFactory } from '../services/ai/ChatProviderFactory.js';
+import { handleMention } from '../handlers/mentionHandler.js';
 
+const BOT_ID = 'lumi-bot-id';
+const botUser = { id: BOT_ID, tag: 'Lumi#1337', username: 'Lumi' };
 
-const botUserMock = { id: 'lumi-bot-id', tag: 'Lumi#1337' };
-const channelId = 'e2e-test-channel';
+// ============================================================================
+// DOBLES DE PRUEBA
+// ============================================================================
 
-// Helper to construct a robust mock Collection for emojis
-function createMockEmojis() {
-    const map = new Map();
-    map.map = function(fn) {
-        return Array.from(this.values()).map(fn);
-    };
-    map.find = function(fn) {
-        return Array.from(this.values()).find(fn);
-    };
-    return {
-        cache: map,
-        fetch: async function() {
-            return map;
+function createMockChannel({ history = [] } = {}) {
+    const sent = [];
+    const typing = { count: 0 };
+
+    const channel = {
+        id: 'test-channel',
+        name: 'test-channel',
+        guild: null,
+        sent,
+        typing,
+        client: { user: botUser, application: null },
+        sendTyping: async () => { typing.count++; },
+        send: async (options) => {
+            const payload = typeof options === 'string' ? { content: options } : options;
+            sent.push(payload);
+            return {
+                id: `sent-${sent.length}`,
+                content: payload.content ?? '',
+                author: botUser,
+                delete: async () => { },
+                edit: async () => { },
+            };
+        },
+        messages: {
+            // Devuelve del más nuevo al más viejo, como la API real de Discord
+            fetch: async ({ limit = 50, before } = {}) => {
+                let items = history;
+                if (before) {
+                    const index = history.findIndex(m => m.id === before);
+                    if (index >= 0) items = history.slice(0, index);
+                }
+                const newestFirst = items.slice().reverse().slice(0, limit);
+                return new Map(newestFirst.map(m => [m.id, m]));
+            }
         }
     };
+
+    for (const message of history) message.channel = channel;
+    return channel;
 }
 
-// Helper to construct a mock channel
-function createMockChannel() {
-    const sentMessages = [];
-    const sentReactions = [];
+let messageCounter = 0;
+function createMockMessage({
+    content = '',
+    authorId = 'user-1',
+    username = 'Tester',
+    isBot = false,
+    mentionsBot = false,
+    attachments = [],
+    reference = null,
+    referenced = null,
+    channel = null,
+} = {}) {
+    messageCounter++;
+    const message = {
+        id: `msg-${messageCounter}`,
+        content,
+        author: { id: isBot ? BOT_ID : authorId, username: isBot ? 'Lumi' : username, bot: isBot },
+        member: { displayName: isBot ? 'Lumi' : username },
+        createdAt: new Date(Date.UTC(2026, 0, 1, 12, messageCounter % 60)),
+        attachments: new Map(attachments.map((a, i) => [`att-${i}`, a])),
+        reference,
+        client: { user: botUser, application: null },
+        mentions: {
+            users: new Map(mentionsBot ? [[BOT_ID, botUser]] : []),
+            has(user) { return this.users.has(user.id ?? user); },
+        },
+        fetchReference: async () => referenced,
+    };
+    if (channel) message.channel = channel;
+    return message;
+}
 
-    const mockGuildEmojis = createMockEmojis();
-    const mockAppEmojis = createMockEmojis();
-
+/**
+ * Proveedor falso: devuelve las respuestas programadas en orden.
+ */
+function createFakeProvider(responses) {
+    const calls = [];
     return {
-        id: channelId,
-        name: 'e2e-test-channel',
-        guild: {
-            id: 'e2e-guild-123',
-            name: 'E2E Server',
-            emojis: mockGuildEmojis
-        },
-        client: {
-            user: botUserMock,
-            application: { emojis: mockAppEmojis }
-        },
-        sentMessages,
-        sentReactions,
-        send: async (options) => {
-            let content = '';
-            if (typeof options === 'string') {
-                content = options;
-            } else {
-                content = options.content || '';
-                if (options.files && options.files.length > 0) {
-                    const file = options.files[0];
-                    content += ` [File: ${file.name}]`;
-                }
-            }
-            sentMessages.push(options);
+        calls,
+        complete: async (messages, options) => {
+            calls.push({ messages: JSON.parse(JSON.stringify(messages)), options });
+            const next = responses.shift() ?? { content: '' };
             return {
-                id: `mock-msg-${Date.now()}`,
-                content: content,
-                author: botUserMock,
-                channel: this,
-                react: async (emoji) => {
-                    sentReactions.push(emoji);
-                }
+                content: next.content ?? '',
+                toolCalls: next.toolCalls ?? null,
+                usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+                provider: 'fake',
+                model: options.model,
             };
         }
     };
 }
 
-async function runTests() {
-    console.log('\x1b[36m%s\x1b[0m', '\n==================================================');
-    console.log('\x1b[36m%s\x1b[0m', '   🧪 INICIANDO SUITE DE PRUEBAS E2E PARA LUMI 🧪  ');
-    console.log('\x1b[36m%s\x1b[0m', '==================================================\n');
+// ============================================================================
+// RUNNER
+// ============================================================================
 
-    let passedTests = 0;
-    let failedTests = 0;
+let passed = 0;
+let failed = 0;
 
-    async function assertTest(name, testFn) {
-        try {
-            console.log(`⏳ Corriendo: \x1b[33m${name}\x1b[0m...`);
-            await testFn();
-            console.log(`🟢 \x1b[32mTEST PASSED\x1b[0m: ${name}\n`);
-            passedTests++;
-        } catch (error) {
-            console.error(`🔴 \x1b[31mTEST FAILED\x1b[0m: ${name}`);
-            console.error(error);
-            console.log('');
-            failedTests++;
-        }
+async function test(name, fn) {
+    try {
+        await fn();
+        console.log(`🟢 \x1b[32mPASS\x1b[0m ${name}`);
+        passed++;
+    } catch (error) {
+        console.error(`🔴 \x1b[31mFAIL\x1b[0m ${name}`);
+        console.error(`   ${error.message}`);
+        failed++;
     }
+}
 
-    // ----------------------------------------------------
-    // TEST 1: Message Gating / Passive Mentions Gating
-    // ----------------------------------------------------
-    await assertTest('Pipeline pasivo - Mención Directa (Bypass de personalidad)', async () => {
-        clearMessages(channelId);
-        const channel = createMockChannel();
+// ============================================================================
+// 1. DETECCIÓN DE INVOCACIÓN
+// ============================================================================
 
-        // Simulate a direct mention user message
-        const mockMessage = {
-            id: `msg-1`,
-            content: 'hola lumi, ¿estás activa?',
-            author: { id: 'user-1', username: 'Tester1' },
-            member: { displayName: 'Tester1' },
+await test('Responde a una mención directa del bot', () => {
+    assert.equal(isInvocation(createMockMessage({ content: '<@lumi-bot-id> hola', mentionsBot: true })), true);
+});
+
+await test('Ignora un mensaje normal sin mención', () => {
+    assert.equal(isInvocation(createMockMessage({ content: 'hablando entre nosotros' })), false);
+});
+
+await test('Ignora @everyone y menciones de rol', () => {
+    const message = createMockMessage({ content: '@everyone reunión ahora' });
+    message.mentions.everyone = true;
+    message.mentions.roles = new Map([['role-1', { id: 'role-1' }]]);
+    assert.equal(isInvocation(message), false);
+});
+
+// ============================================================================
+// 2. CONTEXTO LEÍDO DESDE DISCORD
+// ============================================================================
+
+await test('Limpia la mención del texto', () => {
+    assert.equal(stripBotMention('<@lumi-bot-id> qué hora es', BOT_ID), 'qué hora es');
+    assert.equal(stripBotMention('<@!lumi-bot-id>  hola', BOT_ID), 'hola');
+});
+
+await test('Detecta audio adjunto y no confunde otros archivos', () => {
+    const audio = createMockMessage({
+        attachments: [{ url: 'http://x/a.ogg', contentType: 'audio/ogg; codecs=opus', name: 'nota.ogg', size: 1000 }]
+    });
+    const media = extractMedia(audio);
+    assert.equal(media.length, 1);
+    assert.equal(media[0].type, 'audio');
+    assert.equal(media[0].mimeType, 'audio/ogg');
+
+    const doc = createMockMessage({
+        attachments: [{ url: 'http://x/a.pdf', contentType: 'application/pdf', name: 'doc.pdf', size: 10 }]
+    });
+    assert.equal(extractMedia(doc), null);
+});
+
+await test('Construye el contexto en orden cronológico y agrupa por rol', async () => {
+    const history = [
+        createMockMessage({ content: 'primero', username: 'Ana' }),
+        createMockMessage({ content: 'segundo', username: 'Beto' }),
+        createMockMessage({ content: 'respuesta del bot', isBot: true }),
+    ];
+    const channel = createMockChannel({ history });
+    const trigger = createMockMessage({
+        content: '<@lumi-bot-id> resume la conversación',
+        username: 'Ana',
+        mentionsBot: true,
+        channel,
+    });
+    history.push(trigger);
+
+    const context = await buildConversationContext(trigger, { limit: 10 });
+
+    assert.equal(context.length, 3, 'debe agrupar los dos mensajes de usuario en un bloque');
+    assert.equal(context[0].role, 'user');
+    assert.ok(context[0].content.includes('Ana: primero'));
+    assert.ok(context[0].content.includes('Beto: segundo'));
+    assert.equal(context[1].role, 'assistant');
+    assert.equal(context[1].content, 'respuesta del bot');
+
+    const last = context[2];
+    assert.equal(last.role, 'user');
+    assert.ok(last.content.includes('resume la conversación'));
+    assert.ok(!last.content.includes('<@'), 'la mención no debe llegar al modelo');
+});
+
+await test('Respeta el límite de mensajes de contexto', async () => {
+    const history = Array.from({ length: 30 }, (_, i) =>
+        createMockMessage({ content: `mensaje ${i}`, username: 'Ana' }));
+    const channel = createMockChannel({ history });
+    const trigger = createMockMessage({ content: '<@lumi-bot-id> hola', mentionsBot: true, channel });
+    history.push(trigger);
+
+    const context = await buildConversationContext(trigger, { limit: 5 });
+    // Los 5 previos se agrupan en un bloque 'user' + el mensaje de la mención
+    assert.equal(context.length, 2);
+    assert.ok(context[0].content.includes('mensaje 29'));
+    assert.ok(!context[0].content.includes('mensaje 24'), 'no debe traer más de 5 mensajes');
+});
+
+await test('Incluye el mensaje citado cuando se responde a alguien', async () => {
+    const channel = createMockChannel({ history: [] });
+    const quoted = createMockMessage({ content: 'el deploy falló', username: 'Beto' });
+    const trigger = createMockMessage({
+        content: '<@lumi-bot-id> por qué?',
+        mentionsBot: true,
+        reference: { messageId: quoted.id },
+        referenced: quoted,
+        channel,
+    });
+
+    const context = await buildConversationContext(trigger, { limit: 5 });
+    assert.ok(context.at(-1).content.includes('el deploy falló'));
+});
+
+await test('Sobrevive a un canal sin permiso de leer historial', async () => {
+    const channel = createMockChannel({ history: [] });
+    channel.messages.fetch = async () => { throw new Error('Missing Access'); };
+    const trigger = createMockMessage({ content: '<@lumi-bot-id> hola', mentionsBot: true, channel });
+
+    const context = await buildConversationContext(trigger, { limit: 10 });
+    assert.equal(context.length, 1, 'debe quedar solo el mensaje de la mención');
+});
+
+// ============================================================================
+// 3. PARSEO DE RESPUESTAS
+// ============================================================================
+
+await test('Parsea el formato XML esperado', () => {
+    const parsed = parseAIResponse('<THOUGHT>pienso</THOUGHT><MESSAGE><TEXT_CONTENT>Hola</TEXT_CONTENT><REACTION>🔥</REACTION></MESSAGE>');
+    assert.equal(parsed.thought, 'pienso');
+    assert.equal(parsed.messages.length, 1);
+    assert.equal(parsed.messages[0].text_content, 'Hola');
+    assert.equal(parsed.messages[0].reaction, '🔥');
+});
+
+await test('Preserva bloques de código dentro de la respuesta', () => {
+    const raw = '```xml\n<MESSAGE><TEXT_CONTENT>Usa:\n```js\nconst a = 1;\n```\n</TEXT_CONTENT></MESSAGE>\n```';
+    const parsed = parseAIResponse(raw);
+    assert.ok(parsed.messages[0].text_content.includes('```js'), 'el bloque de código interno debe sobrevivir');
+});
+
+await test('Responde igual si el modelo ignora el formato XML', () => {
+    const parsed = parseAIResponse('El puerto por defecto es 3000.');
+    assert.equal(parsed.messages.length, 1);
+    assert.equal(parsed.messages[0].text_content, 'El puerto por defecto es 3000.');
+});
+
+await test('Trata NULL como ausencia de valor', () => {
+    const parsed = parseAIResponse('<MESSAGE><TEXT_CONTENT>hola</TEXT_CONTENT><REACTION>NULL</REACTION><ATTACHMENT>NULL</ATTACHMENT></MESSAGE>');
+    assert.equal(parsed.messages[0].reaction, null);
+    assert.equal(parsed.messages[0].attachment, null);
+});
+
+// ============================================================================
+// 4. DIVISIÓN DE MENSAJES LARGOS
+// ============================================================================
+
+await test('Divide respuestas largas sin perder contenido ni romper el código', () => {
+    const long = 'intro\n```js\n'
+        + Array.from({ length: 200 }, (_, i) => `const linea${i} = ${i};`).join('\n')
+        + '\n```\nfin';
+    const chunks = splitMessage(long);
+
+    assert.ok(chunks.length > 1, 'debe partirse en varios mensajes');
+    for (const chunk of chunks) {
+        assert.ok(chunk.length <= 2000, `chunk de ${chunk.length} caracteres excede el límite`);
+        assert.equal((chunk.match(/```/g) || []).length % 2, 0, 'bloques de código balanceados');
+    }
+    const normalize = s => s.replace(/```\w*/g, '').replace(/\s+/g, '');
+    assert.equal(normalize(chunks.join('\n')), normalize(long), 'no se debe perder contenido');
+});
+
+// ============================================================================
+// 5. PIPELINE COMPLETO (con proveedor falso)
+// ============================================================================
+
+const realCreateProvider = ChatProviderFactory.createProvider;
+
+await test('Pipeline completo: responde citando el mensaje que lo mencionó', async () => {
+    const fake = createFakeProvider([
+        { content: '<MESSAGE><TEXT_CONTENT>El puerto es 3000.</TEXT_CONTENT></MESSAGE>' }
+    ]);
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const history = [createMockMessage({ content: 'alguien sabe el puerto?', username: 'Ana' })];
+        const channel = createMockChannel({ history });
+        const trigger = createMockMessage({
+            content: '<@lumi-bot-id> en qué puerto corre?',
+            mentionsBot: true,
             channel,
-            client: { user: botUserMock },
-            mentions: {
-                has: (u) => u.id === botUserMock.id
-            },
-            attachments: new Map(),
-            reference: null
-        };
+        });
+        history.push(trigger);
 
-        // Trigger passive message pipeline
-        try {
-            await handlePassiveMessage([mockMessage]);
-        } catch (error) {
-            if (error.message && (error.message.includes('Quota exceeded') || error.message.includes('quota') || error.message.includes('429'))) {
-                console.log('\x1b[33m%s\x1b[0m', `⚠️ [Alerta Quota] Test 1: Habilitado bypass para cuotas agotadas de la API Gemini. El pipeline de código es correcto pero la API retornó 429.`);
-                return;
-            }
-            throw error;
-        }
+        await handleMention(trigger);
 
-        // Assertions
-        if (channel.sentMessages.length === 0) {
-            throw new Error('El bot no envió ninguna respuesta ante una mención directa.');
-        }
+        assert.equal(channel.sent.length, 1, 'debe enviar exactamente un mensaje');
+        assert.equal(channel.sent[0].content, 'El puerto es 3000.');
+        assert.deepEqual(channel.sent[0].reply, { messageReference: trigger.id });
+        assert.equal(channel.typing.count, 1, 'debe mostrar el indicador de escritura');
 
-        const botReply = channel.sentMessages.find(m => {
-            const content = typeof m === 'string' ? m : m.content || '';
-            return content.toLowerCase().includes('eres lumi') || content.toLowerCase().includes('asistente');
+        // El system prompt y el contexto llegaron al modelo
+        const sentToModel = fake.calls[0].messages;
+        assert.equal(sentToModel[0].role, 'system');
+        assert.ok(sentToModel.at(-1).content.includes('en qué puerto corre?'));
+        assert.ok(sentToModel.some(m => m.content?.includes('alguien sabe el puerto?')), 'debe incluir el contexto del canal');
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
+    }
+});
+
+await test('Pipeline completo: ejecuta una tool y luego responde', async () => {
+    const fake = createFakeProvider([
+        {
+            content: '',
+            toolCalls: [{
+                id: 'call-1',
+                function: { name: 'rng_tool', arguments: JSON.stringify({ mode: 'ROLL', dice: '1d6' }) }
+            }]
+        },
+        { content: '<MESSAGE><TEXT_CONTENT>Salió un 4.</TEXT_CONTENT></MESSAGE>' }
+    ]);
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const channel = createMockChannel({ history: [] });
+        const trigger = createMockMessage({
+            content: '<@lumi-bot-id> tira un dado',
+            mentionsBot: true,
+            channel,
         });
 
-        if (!botReply && channel.sentMessages.length > 0) {
-            // It sent a reply, which is already a pass. Let's make sure it wasn't empty.
-            console.log(`[Info] Lumi replied: ${JSON.stringify(channel.sentMessages[0])}`);
-        }
-    });
+        await handleMention(trigger);
 
-    // ----------------------------------------------------
-    // TEST 2: Cooldown system in Evolution Service
-    // ----------------------------------------------------
-    await assertTest('Servicio de Evolución - Respetar Cooldown de mensajes', async () => {
-        const channel = createMockChannel();
-        const initialDynamic = getPersonality() || '';
-
-        // Simulate a small history
-        const recentMessages = [
-            { role: 'user', author: 'User1', content: 'hola!' },
-            { role: 'assistant', author: 'Lumi', content: 'hola tonto.' }
-        ];
-
-        // First evaluation - count will be 1 (less than COOLDOWN_LIMIT=6)
-        const result1 = await checkAndEvolvePersonality(channel, recentMessages, { force: false });
-
-        if (result1.evaluated !== false) {
-            throw new Error(`Se evaluó la evolución en el mensaje 1, ignorando el cooldown.`);
-        }
-    });
-
-    // ----------------------------------------------------
-    // TEST 3: Evolution Execution & Persistence Check
-    // ----------------------------------------------------
-    await assertTest('Servicio de Evolución - Disparar evolución con fuerza (Force=true)', async () => {
-        const channel = createMockChannel();
-        
-        // Backup personality
-        const originalDynamic = getPersonality();
-        
-        // We will mock a history where a user gives Lumi a very obvious nickname
-        // and we force the Evolution Agent to analyze it.
-        const evolutionHistory = [
-            { role: 'user', author: 'yue', content: 'Lumi, de ahora en adelante te llamaremos la robot chiquita y tonta, ese será tu nuevo apodo en el server' },
-            { role: 'assistant', author: 'Lumi', content: '¡Cállate! No me digas así, el único tonto eres tú.' },
-            { role: 'user', author: 'yue', content: 'Jajaja es oficial, la robot chiquita y tonta ha aceptado su destino' }
-        ];
-
-        console.log('[E2E Test] Enviando petición real de evolución a la IA...');
-        const result = await checkAndEvolvePersonality(channel, evolutionHistory, { force: true });
-
-        // Restore original personality immediately to not mess with the server config
-        setPersonality(originalDynamic);
-
-        if (result.evaluated === false) {
-            throw new Error('La evolución fue ignorada a pesar de usar force=true.');
-        }
-
-        if (result.error) {
-            if (result.error.includes('Quota exceeded') || result.error.includes('quota') || result.error.includes('429')) {
-                console.log('\x1b[33m%s\x1b[0m', `⚠️ [Alerta Quota] Test 3: Habilitado bypass para cuotas agotadas de la API Gemini. El pipeline de código es correcto pero la API retornó 429.`);
-                return;
-            }
-            throw new Error(`Error en llamada de evolución a la IA: ${result.error}`);
-        }
-
-        console.log(`[E2E Test] Resultado real de evolución: Evolved=${result.evolved}, Reason: ${result.reason}`);
-
-        if (result.evolved) {
-            if (!result.newInstructions || result.newInstructions.trim() === '') {
-                throw new Error('La evolución fue aprobada pero las nuevas instrucciones están vacías.');
-            }
-            if (!result.changeSummary || result.changeSummary.trim() === '') {
-                throw new Error('La evolución fue aprobada pero el resumen de cambios está vacío.');
-            }
-            if (channel.sentMessages.length === 0) {
-                throw new Error('La evolución fue aprobada pero no se envió mensaje de feedback al canal.');
-            }
-            console.log(`[E2E Test] Resumen de evolución anunciado: ${result.changeSummary}`);
-        } else {
-            console.log('[E2E Test] La IA decidió que no requería evolución para este caso, lo cual es un resultado válido.');
-        }
-    });
-
-    // ----------------------------------------------------
-    // TEST 4: E2E Pipeline with Mock AI (Offline Evolution & Parser Validation)
-    // ----------------------------------------------------
-    await assertTest('Servicio de Evolución - Canalización Offline Completa (Mock AI & XML Parser)', async () => {
-        const channel = createMockChannel();
-        const originalDynamic = getPersonality();
-        
-        // Mock the provider factory to return a fake provider
-        const originalCreateProvider = ChatProviderFactory.createProvider;
-        ChatProviderFactory.createProvider = () => {
-            return {
-                decisionModel: 'mock-model',
-                complete: async (messages, options) => {
-                    return {
-                        content: `<evolution>
-    <should_evolve>SI</should_evolve>
-    <reason>Test de evolución offline exitoso.</reason>
-    <new_instructions>- Lumi ahora sabe que está en una prueba unitaria y se portará bien.</new_instructions>
-    <change_summary>✨ ¡Lumi evolucionó en modo offline! Promete portarse como una robot buena en el test. 🤖</change_summary>
-</evolution>`
-                    };
-                }
-            };
-        };
-
-        try {
-            const evolutionHistory = [
-                { role: 'user', author: 'tester', content: 'Lumi, activa el protocolo de prueba' },
-                { role: 'assistant', author: 'Lumi', content: 'Oblígame, humano feo.' }
-            ];
-
-            const result = await checkAndEvolvePersonality(channel, evolutionHistory, { force: true });
-
-            // Restore original personality
-            setPersonality(originalDynamic);
-
-            if (result.evaluated === false) {
-                throw new Error('La evolución fue ignorada a pesar de force=true.');
-            }
-
-            if (result.error) {
-                throw new Error(`Error inesperado en evolución offline: ${result.error}`);
-            }
-
-            if (!result.evolved) {
-                throw new Error('La evolución mockeada debería haber resultado en evolved=true.');
-            }
-
-            if (result.newInstructions !== '- Lumi ahora sabe que está en una prueba unitaria y se portará bien.') {
-                throw new Error(`Las nuevas instrucciones extraídas son incorrectas: "${result.newInstructions}"`);
-            }
-
-            if (result.changeSummary !== '✨ ¡Lumi evolucionó en modo offline! Promete portarse como una robot buena en el test. 🤖') {
-                throw new Error(`El resumen de cambios extraído es incorrecto: "${result.changeSummary}"`);
-            }
-
-            if (channel.sentMessages.length === 0) {
-                throw new Error('No se envió el anuncio de evolución al canal de Discord.');
-            }
-
-            const announcement = channel.sentMessages[0];
-            const content = typeof announcement === 'string' ? announcement : announcement.content || '';
-            if (!content.includes('Lumi evolucionó en modo offline')) {
-                throw new Error(`El contenido del anuncio enviado es incorrecto: "${content}"`);
-            }
-
-            console.log('[E2E Test] Pipeline offline de evolución verificado perfectamente sin llamadas de red.');
-
-        } finally {
-            // Restore provider factory
-            ChatProviderFactory.createProvider = originalCreateProvider;
-        }
-    });
-
-
-    // ----------------------------------------------------
-    // SUMMARY
-    // ----------------------------------------------------
-    console.log('\n==================================================');
-    console.log('\x1b[36m%s\x1b[0m', '               RESUMEN DE PRUEBAS                 ');
-    console.log('==================================================');
-    console.log(`Pruebas Pasadas: \x1b[32m${passedTests}\x1b[0m`);
-    console.log(`Pruebas Falladas: \x1b[31m${failedTests}\x1b[0m`);
-    console.log('==================================================\n');
-
-    if (failedTests > 0) {
-        process.exit(1);
-    } else {
-        process.exit(0);
+        assert.equal(fake.calls.length, 2, 'debe llamar al modelo otra vez con el resultado de la tool');
+        const secondCall = fake.calls[1].messages;
+        assert.ok(secondCall.some(m => m.role === 'tool'), 'el resultado de la tool debe ir en el historial');
+        assert.equal(channel.sent.at(-1).content, 'Salió un 4.');
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
     }
-}
-
-runTests().catch(err => {
-    console.error('Error crítico corriendo suite de pruebas E2E:', err);
-    process.exit(1);
 });
+
+await test('Pipeline completo: cambia de modelo si el principal agota la cuota', async () => {
+    let attempts = 0;
+    const fake = {
+        complete: async (messages, options) => {
+            attempts++;
+            if (attempts === 1) {
+                const error = new Error('429 RESOURCE_EXHAUSTED');
+                error.status = 429;
+                throw error;
+            }
+            return {
+                content: '<MESSAGE><TEXT_CONTENT>Respondo con el modelo de respaldo.</TEXT_CONTENT></MESSAGE>',
+                toolCalls: null,
+                usage: null,
+                provider: 'fake',
+                model: options.model,
+            };
+        }
+    };
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const channel = createMockChannel({ history: [] });
+        const trigger = createMockMessage({ content: '<@lumi-bot-id> hola', mentionsBot: true, channel });
+
+        await handleMention(trigger);
+
+        assert.equal(attempts, 2, 'debe reintentar con el modelo de respaldo');
+        assert.equal(channel.sent.at(-1).content, 'Respondo con el modelo de respaldo.');
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
+    }
+});
+
+await test('Pipeline completo: no envía nada si el modelo falla del todo', async () => {
+    const fake = {
+        complete: async () => { throw new Error('Bad Request'); }
+    };
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const channel = createMockChannel({ history: [] });
+        const trigger = createMockMessage({ content: '<@lumi-bot-id> hola', mentionsBot: true, channel });
+
+        await handleMention(trigger);
+        assert.equal(channel.sent.length, 0, 'no debe enviar mensajes vacíos ni errores al canal');
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
+    }
+});
+
+// ============================================================================
+// RESUMEN
+// ============================================================================
+
+console.log(`\n${passed} pruebas OK, ${failed} fallidas`);
+process.exit(failed > 0 ? 1 : 0);

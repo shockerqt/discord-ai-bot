@@ -1,34 +1,23 @@
 import 'dotenv/config';
 import express from 'express';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 import {
   InteractionType,
   InteractionResponseType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
-// import { Client, GatewayIntentBits } from 'discord.js'; // Removed
-import { DiscordRequest } from './utils.js';
-import { client } from './discordClient.js'; // Imported
-import * as resetCommand from './commands/reset.js';
-import * as memoryCommand from './commands/memory.js';
+import { client } from './discordClient.js';
 import * as configureCommand from './commands/configure.js';
 import * as pingCommand from './commands/ping.js';
 import * as joinCommand from './commands/join.js';
+import * as leaveCommand from './commands/leave.js';
 import * as debugCommand from './commands/debug.js';
 import * as historyCommand from './commands/history.js';
-import * as evolveCommand from './commands/evolve.js';
-import { getActiveChannels, getAllMessages, getFormattedHistory } from './utils/messageStore.js';
-import { getConfig, setDecisionModel, getPersonality, setPersonality } from './utils/configStore.js';
-import { reloadDecisionInstructions } from './utils/agentManager.js';
-import { getLogFilePath } from './utils/feedbackStore.js';
-import { getRecentEvolutions } from './utils/evolutionStore.js';
-import { checkAndEvolvePersonality } from './services/ai/personalityEvolutionService.js';
+import {
+  getConfig, getPersonality, setPersonality,
+  setModel, setProvider, setPersona, setContextLimit,
+  setTemperature, setPresencePenalty, setFrequencyPenalty
+} from './utils/configStore.js';
 
 // Create an express app
 const app = express();
@@ -66,144 +55,69 @@ function basicAuth(req, res, next) {
   return res.status(401).send('Invalid credentials');
 }
 
-// Dashboard API Routes (Protected)
-app.get('/api/channels', basicAuth, async (req, res) => {
-  const channels = getActiveChannels();
-  const data = [];
-  for (const id of channels) {
-    try {
-      const channel = await client.channels.fetch(id);
-      data.push({ id, name: channel.name, guild: channel.guild?.name || 'Direct Message' });
-    } catch (e) {
-      data.push({ id, name: 'Unknown Channel', guild: 'Unknown Guild' });
-    }
-  }
-  res.json(data);
-});
+// ============================================================================
+// DASHBOARD API (Protected)
+// ============================================================================
 
-app.get('/api/channels/:id/messages', basicAuth, (req, res) => {
-  res.json(getAllMessages(req.params.id) || []);
-});
-
-// Config API (Protected)
 app.get('/api/config', basicAuth, (req, res) => {
   res.json(getConfig());
 });
 
+// Setters admitidos por PATCH /api/config
+const CONFIG_SETTERS = {
+  provider: setProvider,
+  model: setModel,
+  persona: setPersona,
+  context_limit: setContextLimit,
+  temperature: setTemperature,
+  presence_penalty: setPresencePenalty,
+  frequency_penalty: setFrequencyPenalty,
+};
+
 app.patch('/api/config', basicAuth, express.json(), (req, res) => {
-  const { decision_model } = req.body;
-  if (decision_model !== undefined) setDecisionModel(decision_model);
-  res.json(getConfig());
-});
-
-// Prompt API (Protected)
-app.get('/api/prompts/decision', basicAuth, (req, res) => {
   try {
-    const promptPath = path.join(__dirname, 'prompts', 'decision_agent.md');
-    const content = fs.readFileSync(promptPath, 'utf8');
-    res.json({ content });
+    const applied = [];
+    for (const [key, setter] of Object.entries(CONFIG_SETTERS)) {
+      if (req.body[key] !== undefined) {
+        setter(req.body[key]);
+        applied.push(key);
+      }
+    }
+    if (applied.length === 0) {
+      return res.status(400).json({ error: 'No recognized config fields provided' });
+    }
+    res.json(getConfig());
   } catch (err) {
-    res.status(500).json({ error: 'Failed to read prompt file' });
+    res.status(500).json({ error: 'Failed to update config: ' + err.message });
   }
 });
 
-app.put('/api/prompts/decision', basicAuth, express.json(), (req, res) => {
-  try {
-    const { content } = req.body;
-    if (typeof content !== 'string') return res.status(400).json({ error: 'Invalid content' });
-    
-    const promptPath = path.join(__dirname, 'prompts', 'decision_agent.md');
-    fs.writeFileSync(promptPath, content, 'utf8');
-    reloadDecisionInstructions();
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to save prompt file' });
-  }
+// Instrucciones extra de personalidad (se añaden al system prompt)
+app.get('/api/personality', basicAuth, (req, res) => {
+  res.json({ personality: getPersonality() || '' });
 });
 
-// Feedback / Decisions Export (Protected)
-app.get('/api/decisions/export', basicAuth, (req, res) => {
+app.put('/api/personality', basicAuth, express.json(), (req, res) => {
   try {
-    const logPath = getLogFilePath();
-    if (!fs.existsSync(logPath)) {
-      return res.status(404).json({ error: 'No feedback data available yet.' });
+    const { personality } = req.body;
+    if (typeof personality !== 'string') {
+      return res.status(400).json({ error: 'Invalid personality content' });
     }
-    res.download(logPath, 'decisions_log.jsonl');
+    setPersonality(personality);
+    res.json({ success: true, personality: getPersonality() });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to export decisions' });
-  }
-});
-
-// ============================================================================
-// EVOLUTION API ENDPOINTS (Protected)
-// ============================================================================
-
-// Get current dynamic rules
-app.get('/api/evolution/active', basicAuth, (req, res) => {
-  res.json({ activeRules: getPersonality() || '' });
-});
-
-// Update dynamic rules manually
-app.put('/api/evolution/active', basicAuth, express.json(), (req, res) => {
-  try {
-    const { activeRules } = req.body;
-    if (typeof activeRules !== 'string') {
-      return res.status(400).json({ error: 'Invalid activeRules content' });
-    }
-    setPersonality(activeRules);
-    res.json({ success: true, activeRules: getPersonality() });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update dynamic personality rules: ' + err.message });
-  }
-});
-
-// Get evolution logs/history
-app.get('/api/evolution/history', basicAuth, (req, res) => {
-  try {
-    const history = getRecentEvolutions(50);
-    res.json(history);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to retrieve evolution history: ' + err.message });
-  }
-});
-
-// Trigger a manual evolution evaluation from the dashboard
-app.post('/api/evolution/trigger', basicAuth, express.json(), async (req, res) => {
-  try {
-    const { channelId } = req.body;
-    if (!channelId) {
-      return res.status(400).json({ error: 'channelId is required' });
-    }
-
-    console.log(`[Dashboard API] Manual evolution trigger requested for channel ${channelId}`);
-    const channel = await client.channels.fetch(channelId);
-    if (!channel) {
-      return res.status(404).json({ error: `Channel ${channelId} not found in Discord client` });
-    }
-
-    const history = getFormattedHistory(channelId);
-    if (!history || history.length === 0) {
-      return res.status(400).json({ error: 'No message history available in this channel to evaluate.' });
-    }
-
-    const result = await checkAndEvolvePersonality(channel, history, { force: true });
-    res.json({ success: true, ...result });
-  } catch (err) {
-    console.error(`[Dashboard API] Error triggering evolution:`, err);
-    res.status(500).json({ error: 'Failed to execute evolution check: ' + err.message });
+    res.status(500).json({ error: 'Failed to update personality: ' + err.message });
   }
 });
 
 // Command Registry
 const commands = {
-  [resetCommand.data.name]: resetCommand,
   [configureCommand.data.name]: configureCommand,
-  [memoryCommand.MEMORY_COMMAND.name]: { execute: memoryCommand.memoryCommand },
   [pingCommand.data.name]: pingCommand,
   [joinCommand.data.name]: joinCommand,
+  [leaveCommand.data.name]: leaveCommand,
   [debugCommand.data.name]: debugCommand,
   [historyCommand.data.name]: historyCommand,
-  [evolveCommand.data.name]: evolveCommand,
 };
 
 /**
