@@ -10,58 +10,90 @@ jobs:
     runs-on: self-hosted
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      TARGET_DIR: /opt/lumi-bot
+      SERVICE_NAME: lumi-bot.service
+      APP_HOST: 127.0.0.1
+      APP_PORT: "8081"
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Deploy Application
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          PUBLIC_KEY: ${{ secrets.PUBLIC_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          TENOR_API_KEY: ${{ secrets.TENOR_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+          DEFAULT_DEBUG_MODE: ${{ vars.DEFAULT_DEBUG_MODE }}
         run: |
-          # Define target directory
-          TARGET_DIR="/opt/zavier-sama"
+          set -euo pipefail
 
-          # Create/Ensure target directory permissions
           if [ ! -d "$TARGET_DIR" ]; then
               echo "Creating target directory..."
-              sudo mkdir -p $TARGET_DIR
-              sudo chown -R $USER:$USER $TARGET_DIR
+              sudo mkdir -p "$TARGET_DIR"
           fi
-          
-          # Force ownership to current runner user
-          sudo chown -R $USER:$USER $TARGET_DIR
+
+          sudo chown -R "$USER:$USER" "$TARGET_DIR"
 
           echo "Deploying to $TARGET_DIR..."
 
-          # Sync files:
-          # We use rsync for efficiency if available, or cp.
-          # Exclude .git and node_modules to keep copy clean/fast (npm ci will rebuild)
-          rsync -av --exclude='.git' --exclude='node_modules' --exclude='.env' . $TARGET_DIR/
+          rsync -av --exclude='.git' --exclude='node_modules' --exclude='.env' . "$TARGET_DIR/"
 
-          # Write .env from GitHub Secrets
+          umask 077
           {
-            echo "APP_ID=${{ secrets.APP_ID }}"
-            echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}"
-            echo "PUBLIC_KEY=${{ secrets.PUBLIC_KEY }}"
-            echo "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}"
-            echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}"
-            echo "TENOR_API_KEY=${{ secrets.TENOR_API_KEY }}"
-            echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}"
-            echo "DASHBOARD_PASSWORD=${{ secrets.DASHBOARD_PASSWORD }}"
-            echo "DEFAULT_DEBUG_MODE=${{ vars.DEFAULT_DEBUG_MODE }}"
-            echo "PORT=${{ vars.PORT }}"
-          } > $TARGET_DIR/.env
+            echo "NODE_ENV=production"
+            echo "HOST=$APP_HOST"
+            echo "PORT=$APP_PORT"
+            echo "APP_ID=$APP_ID"
+            echo "DISCORD_TOKEN=$DISCORD_TOKEN"
+            echo "PUBLIC_KEY=$PUBLIC_KEY"
+            echo "MISTRAL_API_KEY=$MISTRAL_API_KEY"
+            echo "GROQ_API_KEY=$GROQ_API_KEY"
+            echo "TENOR_API_KEY=$TENOR_API_KEY"
+            echo "GOOGLE_API_KEY=$GOOGLE_API_KEY"
+            echo "GEMINI_API_KEY=$GEMINI_API_KEY"
+            echo "DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD"
+            echo "DEFAULT_DEBUG_MODE=$DEFAULT_DEBUG_MODE"
+          } > "$TARGET_DIR/.env"
+          chmod 600 "$TARGET_DIR/.env"
 
-          cd $TARGET_DIR
+          cd "$TARGET_DIR"
 
           echo "Installing dependencies..."
-          # Strip lockfile to avoid strictly enforcing Windows x64 optional native dependencies on ARM Linux
           rm -f package-lock.json
-          # Install dependencies locally on server (fresh resolution for ARM)
           npm install --omit=dev --no-package-lock
 
           echo "Registering Slash Commands..."
           npm run register
 
-          echo "Starting/Restarting service..."
-          # Start if not running, restart if already running
-          pm2 startOrRestart ecosystem.config.cjs --env production || pm2 start app.js --name zavier-sama
-          pm2 save
+          echo "Resolving the runner Node runtime..."
+          NODE_BIN="$(command -v node)"
+          test -x "$NODE_BIN"
+          install -d -m 0755 "$TARGET_DIR/runtime"
+          ln -sfn "$NODE_BIN" "$TARGET_DIR/runtime/node"
+
+          echo "Installing $SERVICE_NAME..."
+          sudo install -m 0644 "$TARGET_DIR/deploy/lumi-bot.service" "/etc/systemd/system/$SERVICE_NAME"
+          sudo systemd-analyze verify "/etc/systemd/system/$SERVICE_NAME"
+          sudo systemctl daemon-reload
+          sudo systemctl enable "$SERVICE_NAME"
+          sudo systemctl restart "$SERVICE_NAME"
+
+          echo "Waiting for Lumi Bot health check..."
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error "http://$APP_HOST:$APP_PORT/healthz"; then
+              echo
+              sudo systemctl is-active --quiet "$SERVICE_NAME"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          sudo systemctl status "$SERVICE_NAME" --no-pager || true
+          sudo journalctl -u "$SERVICE_NAME" -n 100 --no-pager || true
+          exit 1

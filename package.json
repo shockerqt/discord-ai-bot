@@ -12,6 +12,9 @@
     "start": "node app.js",
     "register": "node commands.js",
     "dev": "nodemon app.js",
+    "build": "node --check app.js",
+    "test": "npm run test:e2e && npm run test:deploy",
+    "test:deploy": "bash scripts/test-deployment-contract.sh",
     "ngrok": "node utils/start_ngrok.js",
     "simulate": "node scripts/simulate.js",
     "test:e2e": "node tests/e2e.js"
