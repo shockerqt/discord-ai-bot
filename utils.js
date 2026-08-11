@@ -4,22 +4,26 @@ import { verifyKey } from 'discord-interactions';
 export async function DiscordRequest(endpoint, options) {
   // append endpoint to root API URL
   const url = 'https://discord.com/api/v10/' + endpoint;
-  // Stringify payloads
-  if (options.body) options.body = JSON.stringify(options.body);
+
+  // Los adjuntos van como multipart: en ese caso fetch pone el boundary solo
+  const isMultipart = options.body instanceof FormData;
+  if (options.body && !isMultipart) options.body = JSON.stringify(options.body);
+
+  const headers = {
+    Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+    'User-Agent': 'DiscordBot (https://github.com/discord/discord-example-app, 1.0.0)',
+  };
+  if (!isMultipart) headers['Content-Type'] = 'application/json; charset=UTF-8';
+
   // Use fetch to make requests
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-      'Content-Type': 'application/json; charset=UTF-8',
-      'User-Agent': 'DiscordBot (https://github.com/discord/discord-example-app, 1.0.0)',
-    },
-    ...options
-  });
-  // throw API errors
+  const res = await fetch(url, { headers, ...options });
+
+  // throw API errors — el cuerpo no siempre es JSON (proxies, 5xx de gateway),
+  // así que se lee como texto para no enmascarar el error real con un SyntaxError
   if (!res.ok) {
-    const data = await res.json();
-    console.log(res.status);
-    throw new Error(JSON.stringify(data));
+    const detail = await res.text().catch(() => '');
+    console.error(`[DiscordRequest] ${options.method || 'GET'} ${endpoint} → ${res.status}`);
+    throw new Error(`Discord API ${res.status}: ${detail.slice(0, 500)}`);
   }
   // return original response
   return res;

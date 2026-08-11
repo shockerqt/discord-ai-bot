@@ -152,9 +152,9 @@ export const data = {
 };
 
 export async function execute(req, res) {
-    const { data, channel_id, application_id, token } = req.body;
+    const { data, application_id, token } = req.body;
 
-    // Defer immediately
+    // Defer immediately: hay que responder a Discord en menos de 3 segundos
     res.send({
         type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
     });
@@ -163,34 +163,22 @@ export async function execute(req, res) {
     const endpoint = `webhooks/${application_id}/${token}/messages/@original`;
 
     try {
-        const { client: discordClient } = await import('../discordClient.js');
-
         const subCommand = data.options[0].name;
         const subOptions = data.options[0].options || [];
 
         // SHOW
         if (subCommand === 'show') {
-            const personalityBuffer = Buffer.from('\uFEFF' + (getPersonality() || '(No custom personality set)'), 'utf-8');
-
-            const channel = await discordClient.channels.fetch(channel_id);
-            if (!channel) throw new Error("Channel not found.");
-
-            await channel.send({
-                content: `ℹ️ **Current Configuration**\n\n${formatConfig()}\n\n📄 **Personality:** Ver archivo adjunto`,
-                files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
-            });
-
-            await DiscordRequest(endpoint, { method: 'PATCH', body: { content: "Configuration shown!" } });
+            await reply(endpoint, DiscordRequest,
+                `ℹ️ **Current Configuration**\n\n${formatConfig()}`,
+                getPersonality() || '(No custom personality set)');
             return;
         }
 
         // CLEAR_PERSONALITY
         if (subCommand === 'clear_personality') {
             setPersonality('');
-            await DiscordRequest(endpoint, {
-                method: 'PATCH',
-                body: { content: '🗑️ **Personality cleared!** Base instructions are preserved.' }
-            });
+            await reply(endpoint, DiscordRequest,
+                '🗑️ **Personality cleared!** Base instructions are preserved.');
             return;
         }
 
@@ -204,7 +192,7 @@ export async function execute(req, res) {
             } else {
                 setModel(nameOption.value);
             }
-            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            await replyWithConfig(endpoint, DiscordRequest);
             return;
         }
 
@@ -212,7 +200,7 @@ export async function execute(req, res) {
         if (subCommand === 'persona') {
             const modeOption = subOptions.find(o => o.name === 'mode');
             setPersona(modeOption.value);
-            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            await replyWithConfig(endpoint, DiscordRequest);
             return;
         }
 
@@ -220,7 +208,7 @@ export async function execute(req, res) {
         if (subCommand === 'context_limit') {
             const valueOption = subOptions.find(o => o.name === 'value');
             setContextLimit(valueOption.value);
-            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            await replyWithConfig(endpoint, DiscordRequest);
             return;
         }
 
@@ -229,34 +217,32 @@ export async function execute(req, res) {
             const textOption = subOptions.find(o => o.name === 'text');
             const fileOption = subOptions.find(o => o.name === 'file');
 
-            let newText = '';
-
             if (fileOption) {
+                // El archivo SOBREESCRIBE (permite pasarse de los 2000 chars del comando)
                 const attachmentId = fileOption.value;
                 const attachment = req.body.data.resolved?.attachments?.[attachmentId];
+                let newText = '';
                 if (attachment?.url) {
                     try {
                         const response = await fetch(attachment.url);
                         if (!response.ok) throw new Error(`Failed: ${response.status}`);
                         newText = await response.text();
                     } catch (fetchErr) {
-                        await DiscordRequest(endpoint, { method: 'PATCH', body: { content: `❌ Failed: ${fetchErr.message}` } });
+                        await reply(endpoint, DiscordRequest, `❌ Failed: ${fetchErr.message}`);
                         return;
                     }
                 }
-                // File OVERWRITES
                 setPersonality(newText);
             } else if (textOption) {
-                // Text APPENDS
+                // El texto se AÑADE a lo que ya había
                 const current = getPersonality();
-                newText = current ? `${current}\n\n${textOption.value}` : textOption.value;
-                setPersonality(newText);
+                setPersonality(current ? `${current}\n\n${textOption.value}` : textOption.value);
             } else {
-                await DiscordRequest(endpoint, { method: 'PATCH', body: { content: '❌ Provide text or file.' } });
+                await reply(endpoint, DiscordRequest, '❌ Provide text or file.');
                 return;
             }
 
-            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            await replyWithConfig(endpoint, DiscordRequest);
             return;
         }
 
@@ -264,7 +250,7 @@ export async function execute(req, res) {
         if (subCommand === 'creativity') {
             const valueOption = subOptions.find(o => o.name === 'value');
             setTemperature(valueOption.value);
-            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            await replyWithConfig(endpoint, DiscordRequest);
             return;
         }
 
@@ -272,7 +258,7 @@ export async function execute(req, res) {
         if (subCommand === 'presence_penalty') {
             const valueOption = subOptions.find(o => o.name === 'value');
             setPresencePenalty(valueOption.value);
-            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            await replyWithConfig(endpoint, DiscordRequest);
             return;
         }
 
@@ -280,16 +266,57 @@ export async function execute(req, res) {
         if (subCommand === 'frequency_penalty') {
             const valueOption = subOptions.find(o => o.name === 'value');
             setFrequencyPenalty(valueOption.value);
-            await sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest);
+            await replyWithConfig(endpoint, DiscordRequest);
             return;
         }
 
+        await reply(endpoint, DiscordRequest, `❌ Subcomando desconocido: \`${subCommand}\``);
+
     } catch (err) {
-        console.error("Config error:", err);
+        console.error('Config error:', err);
         try {
-            await DiscordRequest(endpoint, { method: 'PATCH', body: { content: `❌ Error: ${err.message}` } });
-        } catch (e) { console.error("Failed to send error:", e); }
+            await reply(endpoint, DiscordRequest, `❌ Error: ${err.message}`);
+        } catch (e) {
+            console.error('Failed to send error:', e);
+        }
     }
+}
+
+/**
+ * Responde a la interacción editando el mensaje diferido.
+ *
+ * Se usa el webhook de la interacción en vez del cliente de Gateway: así funciona
+ * siempre, incluso en DMs o cuando la app está instalada a nivel de usuario, donde
+ * el bot no puede hacer fetch del canal.
+ *
+ * @param {string} endpoint - webhooks/{app}/{token}/messages/@original
+ * @param {Function} DiscordRequest
+ * @param {string} content - Texto de la respuesta
+ * @param {string} [fileContent] - Si viene, se adjunta como personality.txt
+ */
+async function reply(endpoint, DiscordRequest, content, fileContent = null) {
+    if (!fileContent) {
+        await DiscordRequest(endpoint, { method: 'PATCH', body: { content } });
+        return;
+    }
+
+    const form = new FormData();
+    form.append('payload_json', JSON.stringify({
+        content,
+        attachments: [{ id: 0, filename: 'personality.txt' }]
+    }));
+    form.append('files[0]', new Blob(['\uFEFF' + fileContent], { type: 'text/plain' }), 'personality.txt');
+
+    await DiscordRequest(endpoint, { method: 'PATCH', body: form });
+}
+
+/**
+ * Confirma un cambio mostrando la configuración resultante.
+ */
+async function replyWithConfig(endpoint, DiscordRequest) {
+    await reply(endpoint, DiscordRequest,
+        `✅ **Configuration Updated!**\n\n${formatConfig()}`,
+        getPersonality() || '(empty)');
 }
 
 /**
@@ -309,18 +336,4 @@ function formatConfig() {
         `**Presence Penalty:** ${cfg.presence_penalty}`,
         `**Frequency Penalty:** ${cfg.frequency_penalty}`,
     ].join('\n');
-}
-
-async function sendConfigUpdate(discordClient, channel_id, endpoint, DiscordRequest) {
-    const personalityBuffer = Buffer.from('\uFEFF' + (getPersonality() || '(empty)'), 'utf-8');
-
-    const channel = await discordClient.channels.fetch(channel_id);
-    if (!channel) throw new Error("Channel not found.");
-
-    await channel.send({
-        content: `✅ **Configuration Updated!**\n\n${formatConfig()}\n\n📄 **Personality:** Ver archivo adjunto`,
-        files: [{ attachment: personalityBuffer, name: 'personality.txt' }]
-    });
-
-    await DiscordRequest(endpoint, { method: 'PATCH', body: { content: "Configuration updated!" } });
 }
