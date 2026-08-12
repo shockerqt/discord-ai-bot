@@ -36,7 +36,7 @@ el proveedor con `<provider>`.
 
 `configStore` reescribe el archivo en cada cambio, así que también se puede editar desde
 `/configure` o el dashboard sin reiniciar. Si editas el archivo a mano, reinicia el bot
-(`pm2 restart zavier-sama`).
+(`sudo systemctl restart lumi-bot.service`).
 
 ### Opción 2: Variables de entorno
 
@@ -146,7 +146,7 @@ GROQ_API_KEY=...
 MISTRAL_API_KEY=...
 ```
 
-En producción estas viven en `/opt/zavier-sama/.env` en el servidor OCI.
+En producción estas viven en `/opt/lumi-bot/.env` en el servidor OCI.
 
 ---
 

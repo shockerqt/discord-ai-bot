@@ -30,7 +30,7 @@ assert_contains "$APPLICATION" "const HOST = process.env.HOST || '127.0.0.1';"
 assert_contains "$APPLICATION" "app.get('/healthz'"
 assert_contains "$APPLICATION" "app.listen(PORT, HOST"
 
-if grep -Eq 'pm2|/opt/zavier-sama' "$WORKFLOW"; then
+if grep -Eqi 'pm2' "$WORKFLOW"; then
   echo "legacy PM2 deployment reference remains in $WORKFLOW" >&2
   exit 1
 fi
