@@ -102,7 +102,18 @@ npm run ngrok
 
 ## 🚀 Despliegue (CI/CD)
 
-El bot incluye un workflow de GitHub Actions (`.github/workflows/deploy.yml`) para despliegue automático en un self-hosted runner al hacer push a la rama `main`. 
+El bot incluye un workflow de GitHub Actions (`.github/workflows/deploy.yml`) para despliegue automático en un self-hosted runner al hacer push a la rama `main`.
+
+En producción el artefacto vive en `/opt/lumi-bot` y se ejecuta como
+`lumi-bot.service` bajo el usuario `ubuntu`. La aplicación escucha únicamente
+en `127.0.0.1:8081`; Nginx termina TLS y reenvía el tráfico al puerto interno.
+Los logs y el estado se consultan con:
+
+```bash
+sudo systemctl status lumi-bot.service
+sudo journalctl -u lumi-bot.service
+curl --fail http://127.0.0.1:8081/healthz
+```
 
 Durante el despliegue, el archivo `.env` se genera automáticamente. Para configurarlo, debes añadir los siguientes **Secrets** y **Variables** en tu repositorio (`Settings > Secrets and variables > Actions`):
 
@@ -119,7 +130,9 @@ Durante el despliegue, el archivo `.env` se genera automáticamente. Para config
 
 **Repository Variables:**
 - `DEFAULT_DEBUG_MODE` (Ej: `full`, `thoughts`, `off`)
-- `PORT` (Ej: `3000`)
+
+El workflow fija `HOST=127.0.0.1` y `PORT=8081` como parte del contrato de
+producción; no dependen de variables configurables del repositorio.
 
 ## 📋 Comandos
 

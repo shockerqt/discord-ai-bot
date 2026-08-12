@@ -21,8 +21,13 @@ import {
 
 // Create an express app
 const app = express();
-// Get port, or default to 3000
+// Bind locally by default; production ingress is terminated by Nginx.
+const HOST = process.env.HOST || '127.0.0.1';
 const PORT = process.env.PORT || 3000;
+
+app.get('/healthz', (_req, res) => {
+  res.status(200).json({ status: 'ok', service: 'lumi-bot' });
+});
 
 /**
  * Simple Basic Auth Middleware
@@ -168,8 +173,8 @@ export { client };
 // Serve static files for dashboard (Protected) - after /interactions so basicAuth doesn't block it
 app.use('/', basicAuth, express.static('public'));
 
-app.listen(PORT, async () => {
-  console.log('Listening on port', PORT);
+app.listen(PORT, HOST, async () => {
+  console.log(`Listening on http://${HOST}:${PORT}`);
 
   try {
     console.log('Logging in to Discord Gateway...');
