@@ -333,14 +333,14 @@ Debug output is sent as file attachments to avoid cluttering the channel.
 The project features an automated, fast, and extremely clean CI/CD setup:
 
 - **CI/CD Execution**: Handled automatically by `.github/workflows/deploy.yml` on every `git push` to the `main` branch.
-- **Environment**: Runs on a **self-hosted runner** directly installed on the production OCI server `oci1` (`runs-on: self-hosted`).
+- **Environment**: Runs on the dedicated **self-hosted runner** `lumi-bot-vps` on the production OCI server (`runs-on: self-hosted`).
 - **Deployment Process**:
   1. Checks out the latest code from `main`.
-  2. Syncs the workspace to `/opt/zavier-sama/` using `rsync` (efficiently excluding `.git`, `node_modules`, and `.env`).
+  2. Syncs the workspace to `/opt/lumi-bot/` using `rsync` (efficiently excluding `.git`, `node_modules`, and `.env`).
   3. Generates the `.env` file dynamically on the fly using **GitHub Secrets & Variables**.
   4. Strips `package-lock.json` and runs a fresh `npm install --omit=dev --no-package-lock` (vital for resolving ARM/native dependencies correctly).
   5. Registers slash commands globally via `npm run register`.
-  6. Restarts/reloads the PM2 process `zavier-sama` (falling back to direct startup of `app.js` if it isn't running).
+  6. Installs and restarts `lumi-bot.service`, then verifies its loopback health endpoint.
 
 > [!NOTE]
 > **Line Endings (CRLF vs LF) Hash Differences:**
