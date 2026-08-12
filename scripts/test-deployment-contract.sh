@@ -35,6 +35,11 @@ if grep -Eq 'pm2|/opt/zavier-sama' "$WORKFLOW"; then
   exit 1
 fi
 
+if [ -e "$REPOSITORY_ROOT/ecosystem.config.cjs" ]; then
+  echo "legacy PM2 process definition must be removed" >&2
+  exit 1
+fi
+
 if grep -Eq 'echo .*\$\{\{ secrets\.' "$WORKFLOW"; then
   echo "GitHub secrets must not be interpolated directly into shell commands" >&2
   exit 1
