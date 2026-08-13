@@ -67,7 +67,9 @@ CHAT_PROVIDER=gemini   # Solo si no hay config.xml
 | `gemini-2.0-flash` | ⚡⚡⚡ | ⭐⭐⭐⭐ | ✅ | Estable, sin preview |
 
 Lumi usa `thinkingLevel: low` con Gemini 3.7 para mantener baja latencia y
-consumo en conversaciones y llamadas a herramientas del bot.
+consumo en conversaciones y llamadas a herramientas del bot. Cada request de
+3.7 tiene un timeout de 15 segundos y hasta dos intentos antes de permitir el
+fallback configurado.
 
 > **Modelos experimentales** (pueden no estar disponibles):
 > - `gemini-3.1-flash-lite-preview` — preview, cuota muy limitada
