@@ -220,7 +220,7 @@ Configuration is persisted to `config.xml` via `utils/configStore.js` (see `conf
 |---------|---------|-------|
 | `persona` | `assistant` | `assistant` (neutro) or `lumi` (personaje) |
 | `provider` | `gemini` | `gemini` \| `groq` \| `mistral` |
-| `model` | `gemini-3.6-flash` | Model name for the active provider |
+| `model` | `gemini-3.7-flash` | Model name for the active provider |
 | `context_limit` | `20` | Previous channel messages read as context (0–100) |
 | `temperature` | `0.7` | Creativity (0.0–1.0) |
 | `presence_penalty` | `0` | Penalty for new topics (-2.0–2.0) |

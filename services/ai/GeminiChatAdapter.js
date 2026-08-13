@@ -209,7 +209,7 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
      */
     async complete(messages, options = {}) {
         const {
-            model = 'gemini-3.6-flash',
+            model = 'gemini-3.7-flash',
             temperature,
             maxTokens,
             tools,
@@ -222,10 +222,9 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         const geminiTools = this._transformTools(tools);
 
         const config = {};
-        // Gemini 3.5/3.6 use model-managed sampling. Google deprecated the
-        // legacy sampling controls for these models, so omit them while
-        // preserving configurable temperature for older Gemini generations.
-        const usesModelManagedSampling = /^gemini-3\.(5|6)(?:-|$)/.test(model);
+        // Gemini 3.7 uses model-managed sampling. Omit legacy controls for the
+        // current production family while preserving them for older fallbacks.
+        const usesModelManagedSampling = /^gemini-3\.7(?:-|$)/.test(model);
         if (temperature !== undefined && !usesModelManagedSampling) {
             config.temperature = temperature;
         }

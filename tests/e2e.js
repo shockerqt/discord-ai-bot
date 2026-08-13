@@ -275,26 +275,38 @@ await test('Trata NULL como ausencia de valor', () => {
     assert.equal(parsed.messages[0].attachment, null);
 });
 
-await test('Gemini 3.6 omite parámetros de muestreo deprecados', async () => {
+await test('Gemini 3.7 omite muestreo deprecado y conserva function calling', async () => {
     const adapter = new GeminiChatAdapter({ apiKey: 'test-key' });
     let request;
     adapter.client = {
         models: {
             generateContent: async (payload) => {
                 request = payload;
-                return { text: 'ok', usageMetadata: {} };
+                return {
+                    text: '',
+                    usageMetadata: {},
+                    candidates: [{ content: { parts: [{ functionCall: { name: 'rng_tool', args: { mode: 'ROLL' } } }] } }]
+                };
             }
         }
     };
 
     const response = await adapter.complete(
         [{ role: 'user', content: 'hola' }],
-        { model: 'gemini-3.6-flash', temperature: 0.7 }
+        {
+            model: 'gemini-3.7-flash',
+            temperature: 0.7,
+            tools: [{ function: { name: 'rng_tool', description: 'Roll dice', parameters: { type: 'object', properties: {} } } }],
+            toolChoice: 'auto'
+        }
     );
 
-    assert.equal(response.model, 'gemini-3.6-flash');
-    assert.equal(request.model, 'gemini-3.6-flash');
+    assert.equal(response.model, 'gemini-3.7-flash');
+    assert.equal(request.model, 'gemini-3.7-flash');
     assert.equal('temperature' in request.config, false);
+    assert.equal(request.config.toolConfig.functionCallingConfig.mode, 'auto');
+    assert.equal(request.config.tools[0].functionDeclarations[0].name, 'rng_tool');
+    assert.equal(response.toolCalls[0].function.name, 'rng_tool');
 });
 
 await test('Gemini anterior conserva temperatura configurable', async () => {

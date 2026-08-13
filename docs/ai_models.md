@@ -26,7 +26,7 @@ el proveedor con `<provider>`.
 ```xml
 <config>
   <provider>gemini</provider>               <!-- gemini | groq | mistral -->
-  <model>gemini-3.6-flash</model>           <!-- Modelo que responde -->
+  <model>gemini-3.7-flash</model>           <!-- Modelo que responde -->
   <temperature>0.7</temperature>
   <persona>assistant</persona>              <!-- assistant | lumi -->
   <context_limit>20</context_limit>         <!-- Mensajes previos leídos como contexto -->
@@ -59,8 +59,7 @@ CHAT_PROVIDER=gemini   # Solo si no hay config.xml
 
 | Modelo | Velocidad | Calidad | Multimodal | Notas |
 |--------|-----------|---------|------------|-------|
-| `gemini-3.6-flash` | ⚡⚡⚡ | ⭐⭐⭐⭐⭐ | ✅ Texto, imagen, video, audio y PDF | **Recomendado producción** |
-| `gemini-3.5-flash` | ⚡⚡⚡ | ⭐⭐⭐⭐ | ✅ | Respaldo estable |
+| `gemini-3.7-flash` | ⚡⚡⚡ | ⭐⭐⭐⭐⭐ | ✅ Texto, imagen, video, audio y PDF | **Recomendado producción** |
 | `gemini-3.1-flash-lite` | ⚡⚡⚡⚡ | ⭐⭐⭐ | ✅ | Respaldo eficiente |
 | `gemini-2.5-flash` | ⚡⚡⚡ | ⭐⭐⭐⭐ | ✅ Audio, imagen | Compatibilidad anterior |
 | `gemini-2.5-flash-lite` | ⚡⚡⚡⚡ | ⭐⭐⭐ | ✅ | Más barato, menor calidad |
@@ -103,7 +102,7 @@ Opción legacy, menos mantenida en el bot. No recomendada para uso principal.
 
 ```xml
 <provider>gemini</provider>
-<model>gemini-3.6-flash</model>
+<model>gemini-3.7-flash</model>
 ```
 
 ### Fallback sin cuota Gemini — Groq
