@@ -442,6 +442,68 @@ await test('Pipeline completo: ejecuta una tool y luego responde', async () => {
     }
 });
 
+await test('Pipeline GIF: tool result becomes a Discord-compatible attachment', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.KLIPY_API_KEY;
+    process.env.KLIPY_API_KEY = 'test-klipy-key';
+    globalThis.fetch = async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+            results: [{ media_formats: { gif: { url: 'https://media.klipy.com/celebrate.gif' } } }]
+        })
+    });
+
+    let calls = 0;
+    const fake = {
+        complete: async (messages, options) => {
+            calls++;
+            if (calls === 1) {
+                return {
+                    content: '',
+                    toolCalls: [{
+                        id: 'gif-call-1',
+                        function: { name: 'gif_tool', arguments: JSON.stringify({ search_term: 'celebration' }) }
+                    }],
+                    provider: 'fake',
+                    model: options.model,
+                };
+            }
+
+            const toolMessage = messages.find(message => message.role === 'tool' && message.name === 'gif_tool');
+            const gif = JSON.parse(toolMessage.content);
+            return {
+                content: `<MESSAGE><TEXT_CONTENT>¡Funcionó!</TEXT_CONTENT><ATTACHMENT>${gif.result}</ATTACHMENT></MESSAGE>`,
+                toolCalls: null,
+                provider: 'fake',
+                model: options.model,
+            };
+        }
+    };
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const channel = createMockChannel({ history: [] });
+        const trigger = createMockMessage({
+            content: '<@lumi-bot-id> manda un gif de celebración',
+            mentionsBot: true,
+            channel,
+        });
+
+        await handleMention(trigger);
+
+        assert.equal(calls, 2, 'model should receive the GIF tool result');
+        assert.equal(channel.sent.length, 1);
+        assert.equal(channel.sent[0].content, '¡Funcionó!\nhttps://media.klipy.com/celebrate.gif');
+        assert.equal(channel.sent[0].files, undefined, 'GIF should embed by URL instead of upload');
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
+        globalThis.fetch = originalFetch;
+        if (originalKey === undefined) delete process.env.KLIPY_API_KEY;
+        else process.env.KLIPY_API_KEY = originalKey;
+    }
+});
+
 await test('Pipeline completo: cambia de modelo si el principal agota la cuota', async () => {
     let attempts = 0;
     const fake = {

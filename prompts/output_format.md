@@ -56,5 +56,5 @@ Respuesta con un GIF obtenido con `gif_tool`:
 
 <MESSAGE>
 <TEXT_CONTENT>Listo, quedó funcionando 🎉</TEXT_CONTENT>
-<ATTACHMENT>https://media.tenor.com/ejemplo-real-devuelto-por-la-herramienta.gif</ATTACHMENT>
+<ATTACHMENT>https://media.klipy.com/ejemplo-real-devuelto-por-la-herramienta.gif</ATTACHMENT>
 </MESSAGE>

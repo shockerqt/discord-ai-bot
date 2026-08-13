@@ -125,7 +125,7 @@ Durante el despliegue, el archivo `.env` se genera automáticamente. Para config
 - `GEMINI_API_KEY` (usado por el resumidor de videos de YouTube)
 - `MISTRAL_API_KEY` (opcional, si usas Mistral)
 - `GROQ_API_KEY` (opcional, si usas Groq)
-- `TENOR_API_KEY` (opcional, si usas `gif_tool`)
+- `KLIPY_API_KEY` (opcional, habilita `gif_tool`)
 - `DASHBOARD_PASSWORD` (opcional, protege el dashboard)
 
 **Repository Variables:**

@@ -164,14 +164,13 @@ async function sendSingleMessage(channel, output, contentToSend) {
 
     // Attachments
     if (output.attachment && output.attachment.startsWith('http')) {
-        // Optimization: If it's a GIF link from Klipy/Tenor, append it to text content so Discord embeds it directly.
+        // If it is a KLIPY GIF, append the URL so Discord embeds it directly.
         // This avoids:
         // 1. Downloading and re-uploading large GIF files (saving bot bandwidth).
         // 2. Discord's file upload size limits (e.g. 10MB/25MB) which causes messages to fail completely.
         // 3. Excessive response delay.
         const isGifLink = output.attachment.toLowerCase().endsWith('.gif') || 
-                            output.attachment.includes('klipy.com') || 
-                            output.attachment.includes('tenor.com');
+                            output.attachment.includes('klipy.com');
                             
         if (isGifLink) {
             if (!contentToSend.includes(output.attachment)) {
