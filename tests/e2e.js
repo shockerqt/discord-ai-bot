@@ -11,6 +11,7 @@ import { buildConversationContext, extractMedia, stripBotMention } from '../util
 import { parseAIResponse } from '../handlers/message/responseParser.js';
 import { splitMessage } from '../handlers/message/messageSender.js';
 import { ChatProviderFactory } from '../services/ai/ChatProviderFactory.js';
+import { GeminiChatAdapter } from '../services/ai/GeminiChatAdapter.js';
 import { handleMention } from '../handlers/mentionHandler.js';
 
 const BOT_ID = 'lumi-bot-id';
@@ -272,6 +273,48 @@ await test('Trata NULL como ausencia de valor', () => {
     const parsed = parseAIResponse('<MESSAGE><TEXT_CONTENT>hola</TEXT_CONTENT><REACTION>NULL</REACTION><ATTACHMENT>NULL</ATTACHMENT></MESSAGE>');
     assert.equal(parsed.messages[0].reaction, null);
     assert.equal(parsed.messages[0].attachment, null);
+});
+
+await test('Gemini 3.6 omite parámetros de muestreo deprecados', async () => {
+    const adapter = new GeminiChatAdapter({ apiKey: 'test-key' });
+    let request;
+    adapter.client = {
+        models: {
+            generateContent: async (payload) => {
+                request = payload;
+                return { text: 'ok', usageMetadata: {} };
+            }
+        }
+    };
+
+    const response = await adapter.complete(
+        [{ role: 'user', content: 'hola' }],
+        { model: 'gemini-3.6-flash', temperature: 0.7 }
+    );
+
+    assert.equal(response.model, 'gemini-3.6-flash');
+    assert.equal(request.model, 'gemini-3.6-flash');
+    assert.equal('temperature' in request.config, false);
+});
+
+await test('Gemini anterior conserva temperatura configurable', async () => {
+    const adapter = new GeminiChatAdapter({ apiKey: 'test-key' });
+    let request;
+    adapter.client = {
+        models: {
+            generateContent: async (payload) => {
+                request = payload;
+                return { text: 'ok', usageMetadata: {} };
+            }
+        }
+    };
+
+    await adapter.complete(
+        [{ role: 'user', content: 'hola' }],
+        { model: 'gemini-3.1-flash-lite', temperature: 0.4 }
+    );
+
+    assert.equal(request.config.temperature, 0.4);
 });
 
 // ============================================================================

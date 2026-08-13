@@ -209,7 +209,7 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
      */
     async complete(messages, options = {}) {
         const {
-            model = 'gemini-3.5-flash',
+            model = 'gemini-3.6-flash',
             temperature,
             maxTokens,
             tools,
@@ -222,7 +222,13 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         const geminiTools = this._transformTools(tools);
 
         const config = {};
-        if (temperature !== undefined) config.temperature = temperature;
+        // Gemini 3.5/3.6 use model-managed sampling. Google deprecated the
+        // legacy sampling controls for these models, so omit them while
+        // preserving configurable temperature for older Gemini generations.
+        const usesModelManagedSampling = /^gemini-3\.(5|6)(?:-|$)/.test(model);
+        if (temperature !== undefined && !usesModelManagedSampling) {
+            config.temperature = temperature;
+        }
         if (maxTokens !== undefined) config.maxOutputTokens = maxTokens;
         // presencePenalty and frequencyPenalty are NOT supported by Gemini/Gemma models
         if (systemInstruction) config.systemInstruction = systemInstruction;

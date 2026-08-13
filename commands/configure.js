@@ -25,6 +25,8 @@ export const data = {
                     description: 'Model name (provider:model)',
                     required: true,
                     choices: [
+                        { name: 'Gemini 3.6 Flash (Google)', value: 'gemini:gemini-3.6-flash' },
+                        { name: 'Gemini 3.5 Flash (Google)', value: 'gemini:gemini-3.5-flash' },
                         { name: 'Gemini 3.1 Flash Lite Preview (Google)', value: 'gemini:gemini-3.1-flash-lite-preview' },
                         { name: 'Gemini 3 Flash Preview (Google)', value: 'gemini:gemini-3-flash-preview' },
                         { name: 'Gemini 2.5 Pro (Google)', value: 'gemini:gemini-2.5-pro' },
