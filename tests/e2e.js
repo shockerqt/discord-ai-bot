@@ -304,6 +304,7 @@ await test('Gemini 3.7 omite muestreo deprecado y conserva function calling', as
     assert.equal(response.model, 'gemini-3.7-flash');
     assert.equal(request.model, 'gemini-3.7-flash');
     assert.equal('temperature' in request.config, false);
+    assert.equal(request.config.thinkingConfig.thinkingLevel, 'low');
     assert.equal(request.config.toolConfig.functionCallingConfig.mode, 'auto');
     assert.equal(request.config.tools[0].functionDeclarations[0].name, 'rng_tool');
     assert.equal(response.toolCalls[0].function.name, 'rng_tool');

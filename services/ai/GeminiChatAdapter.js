@@ -228,6 +228,9 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         if (temperature !== undefined && !usesModelManagedSampling) {
             config.temperature = temperature;
         }
+        if (usesModelManagedSampling) {
+            config.thinkingConfig = { thinkingLevel: 'low' };
+        }
         if (maxTokens !== undefined) config.maxOutputTokens = maxTokens;
         // presencePenalty and frequencyPenalty are NOT supported by Gemini/Gemma models
         if (systemInstruction) config.systemInstruction = systemInstruction;

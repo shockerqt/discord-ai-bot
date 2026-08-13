@@ -66,6 +66,9 @@ CHAT_PROVIDER=gemini   # Solo si no hay config.xml
 | `gemini-2.5-pro` | ⚡⚡ | ⭐⭐⭐⭐⭐ | ✅ | Máxima calidad, más lento |
 | `gemini-2.0-flash` | ⚡⚡⚡ | ⭐⭐⭐⭐ | ✅ | Estable, sin preview |
 
+Lumi usa `thinkingLevel: low` con Gemini 3.7 para mantener baja latencia y
+consumo en conversaciones y llamadas a herramientas del bot.
+
 > **Modelos experimentales** (pueden no estar disponibles):
 > - `gemini-3.1-flash-lite-preview` — preview, cuota muy limitada
 > - `gemini-3-flash-preview` — preview
