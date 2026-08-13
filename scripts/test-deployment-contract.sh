@@ -28,6 +28,8 @@ assert_contains "$WORKFLOW" "APP_HOST: 127.0.0.1"
 assert_contains "$WORKFLOW" "APP_PORT: \"8081\""
 assert_contains "$WORKFLOW" "systemctl restart \"\$SERVICE_NAME\""
 assert_contains "$WORKFLOW" "http://\$APP_HOST:\$APP_PORT/healthz"
+assert_contains "$WORKFLOW" 'KLIPY_API_KEY: ${{ secrets.KLIPY_API_KEY }}'
+assert_contains "$WORKFLOW" 'echo "KLIPY_API_KEY=$KLIPY_API_KEY"'
 assert_contains "$APPLICATION" "const HOST = process.env.HOST || '127.0.0.1';"
 assert_contains "$APPLICATION" "app.get('/healthz'"
 assert_contains "$APPLICATION" "app.listen(PORT, HOST"
@@ -41,6 +43,11 @@ fi
 
 if grep -Eqi 'pm2' "$WORKFLOW"; then
   echo "legacy PM2 deployment reference remains in $WORKFLOW" >&2
+  exit 1
+fi
+
+if grep -Eq 'TENOR_API_KEY' "$WORKFLOW" "$REPOSITORY_ROOT/utils/tools/gif.js"; then
+  echo "retired Tenor credential remains in the GIF deployment path" >&2
   exit 1
 fi
 

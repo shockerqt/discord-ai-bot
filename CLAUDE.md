@@ -157,7 +157,7 @@ Copy `.env.sample` to `.env` and fill in:
 | `GEMINI_API_KEY` | For video | Key used by `mediaProcessor` (YouTube summaries) |
 | `MISTRAL_API_KEY` | For Mistral | Mistral AI API key |
 | `GROQ_API_KEY` | For Groq | Groq API key |
-| `TENOR_API_KEY` | No | Tenor API key (enables gif_tool) |
+| `KLIPY_API_KEY` | No | KLIPY API key (enables gif_tool) |
 | `DASHBOARD_PASSWORD` | No | Basic-auth password for the dashboard (user: `admin`) |
 | `DEFAULT_DEBUG_MODE` | No | Default debug level: `off`\|`thoughts`\|`full` |
 | `PORT` | No | HTTP server port (default: `3000`) |
