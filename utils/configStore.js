@@ -22,7 +22,7 @@ const MAX_CONTEXT_LIMIT = 100;
 // Default values
 const DEFAULT_CONFIG = {
     provider: 'gemini',
-    model: 'gemini-3.5-flash',
+    model: 'gemini-3.6-flash',
     temperature: 0.7,
     presence_penalty: 0,
     frequency_penalty: 0,

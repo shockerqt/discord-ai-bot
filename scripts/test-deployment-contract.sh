@@ -5,6 +5,8 @@ REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW="$REPOSITORY_ROOT/.github/workflows/deploy.yml"
 UNIT="$REPOSITORY_ROOT/deploy/lumi-bot.service"
 APPLICATION="$REPOSITORY_ROOT/app.js"
+CONFIG_SAMPLE="$REPOSITORY_ROOT/config.sample.xml"
+CONFIG_STORE="$REPOSITORY_ROOT/utils/configStore.js"
 
 assert_contains() {
   file="$1"
@@ -29,6 +31,8 @@ assert_contains "$WORKFLOW" "http://\$APP_HOST:\$APP_PORT/healthz"
 assert_contains "$APPLICATION" "const HOST = process.env.HOST || '127.0.0.1';"
 assert_contains "$APPLICATION" "app.get('/healthz'"
 assert_contains "$APPLICATION" "app.listen(PORT, HOST"
+assert_contains "$CONFIG_SAMPLE" "<model>gemini-3.6-flash</model>"
+assert_contains "$CONFIG_STORE" "model: 'gemini-3.6-flash'"
 
 if grep -Eqi 'pm2' "$WORKFLOW"; then
   echo "legacy PM2 deployment reference remains in $WORKFLOW" >&2
