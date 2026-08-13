@@ -305,6 +305,7 @@ await test('Gemini 3.7 omite muestreo deprecado y conserva function calling', as
     assert.equal(request.model, 'gemini-3.7-flash');
     assert.equal('temperature' in request.config, false);
     assert.equal(request.config.thinkingConfig.thinkingLevel, 'low');
+    assert.equal(request.config.httpOptions.timeout, 15000);
     assert.equal(request.config.toolConfig.functionCallingConfig.mode, 'auto');
     assert.equal(request.config.tools[0].functionDeclarations[0].name, 'rng_tool');
     assert.equal(response.toolCalls[0].function.name, 'rng_tool');
@@ -328,6 +329,27 @@ await test('Gemini anterior conserva temperatura configurable', async () => {
     );
 
     assert.equal(request.config.temperature, 0.4);
+});
+
+await test('Gemini 3.7 acota timeouts y los expone al fallback', async () => {
+    const adapter = new GeminiChatAdapter({ apiKey: 'test-key' });
+    let attempts = 0;
+    adapter.client = {
+        models: {
+            generateContent: async () => {
+                attempts++;
+                const error = new Error('request timeout');
+                error.code = 'ETIMEDOUT';
+                throw error;
+            }
+        }
+    };
+
+    await assert.rejects(
+        adapter.complete([{ role: 'user', content: 'hola' }], { model: 'gemini-3.7-flash' }),
+        (error) => error.httpStatus === 503
+    );
+    assert.equal(attempts, 2);
 });
 
 // ============================================================================

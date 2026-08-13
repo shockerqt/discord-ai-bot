@@ -230,6 +230,7 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         }
         if (usesModelManagedSampling) {
             config.thinkingConfig = { thinkingLevel: 'low' };
+            config.httpOptions = { timeout: 15000 };
         }
         if (maxTokens !== undefined) config.maxOutputTokens = maxTokens;
         // presencePenalty and frequencyPenalty are NOT supported by Gemini/Gemma models
@@ -244,7 +245,7 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
         }
 
 
-        const MAX_RETRIES = 3;
+        const MAX_RETRIES = usesModelManagedSampling ? 2 : 3;
         let lastError;
 
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -297,13 +298,17 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
                 lastError = error;
                 const status = error?.status || error?.httpStatus;
                 // Retry on 500 (internal server error) or 503 (service unavailable/high demand) with exponential backoff
-                if ((status === 500 || status === 503 || error?.message?.includes('"code":500') || error?.message?.includes('"code":503')) && attempt < MAX_RETRIES) {
+                const isTimeout = error?.name === 'AbortError'
+                    || error?.code === 'ETIMEDOUT'
+                    || error?.message?.toLowerCase().includes('timeout');
+                if ((status === 500 || status === 503 || isTimeout || error?.message?.includes('"code":500') || error?.message?.includes('"code":503')) && attempt < MAX_RETRIES) {
                     const delay = attempt * 2000; // Increased delay for 503s
                     console.warn(`[GeminiAdapter] ${status || 500} error on attempt ${attempt}, retrying in ${delay}ms...`);
                     await new Promise(r => setTimeout(r, delay));
                     continue;
                 }
                 console.error('[GeminiAdapter] Error:', error);
+                if (isTimeout && !error.httpStatus) error.httpStatus = 503;
                 throw error;
             }
         }
