@@ -110,6 +110,18 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
                             // Graceful degradation: add a text note so Lumi knows
                             parts.push({ text: `[Audio adjunto: ${media.filename} — no se pudo procesar]` });
                         }
+                    } else if (media.type === 'image') {
+                        try {
+                            const imagePart = await this._resolveImagePart(media);
+                            if (imagePart) {
+                                parts.push(imagePart);
+                                console.log(`[GeminiAdapter] Injecting image part: ${media.filename} (${media.mimeType})`);
+                            }
+                        } catch (err) {
+                            console.error(`[GeminiAdapter] Failed to resolve image ${media.filename}:`, err.message);
+                            // Graceful degradation: add a text note so Lumi knows
+                            parts.push({ text: `[Imagen adjunta: ${media.filename} — no se pudo procesar]` });
+                        }
                     }
                 }
             }
@@ -163,6 +175,64 @@ export class GeminiChatAdapter extends ChatCompletionProvider {
                 }
             };
         }
+    }
+
+    /**
+     * Resolves an image media attachment to an inlineData Gemini API part.
+     * Passes inlineData multimodal image parts directly to Gemini Flash.
+     * @param {{ url?: string, mimeType: string, filename?: string, size?: number, data?: string, buffer?: Buffer }} media
+     * @returns {Promise<Object>} Gemini part object with inlineData
+     */
+    async _resolveImagePart(media) {
+        // Base64 already supplied
+        if (media.data) {
+            return {
+                inlineData: {
+                    mimeType: media.mimeType,
+                    data: media.data,
+                }
+            };
+        }
+
+        // Buffer supplied
+        if (media.buffer) {
+            const buffer = Buffer.isBuffer(media.buffer) ? media.buffer : Buffer.from(media.buffer);
+            return {
+                inlineData: {
+                    mimeType: media.mimeType,
+                    data: buffer.toString('base64'),
+                }
+            };
+        }
+
+        // Data URI
+        if (media.url && media.url.startsWith('data:')) {
+            const commaIdx = media.url.indexOf(',');
+            const base64Data = commaIdx >= 0 ? media.url.slice(commaIdx + 1) : media.url;
+            return {
+                inlineData: {
+                    mimeType: media.mimeType,
+                    data: base64Data,
+                }
+            };
+        }
+
+        // Fetch image data from URL
+        if (media.url) {
+            const response = await fetch(media.url);
+            if (!response.ok) throw new Error(`HTTP ${response.status} fetching image`);
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+
+            return {
+                inlineData: {
+                    mimeType: media.mimeType,
+                    data: buffer.toString('base64'),
+                }
+            };
+        }
+
+        throw new Error('No image data or URL provided');
     }
 
     /**
