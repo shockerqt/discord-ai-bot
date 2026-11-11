@@ -13,6 +13,7 @@ import { splitMessage } from '../handlers/message/messageSender.js';
 import { ChatProviderFactory } from '../services/ai/ChatProviderFactory.js';
 import { GeminiChatAdapter } from '../services/ai/GeminiChatAdapter.js';
 import { handleMention } from '../handlers/mentionHandler.js';
+import { validateImageAttachment, normalizeImageMimeType, MAX_IMAGE_SIZE } from '../services/media/mediaProcessor.js';
 
 const BOT_ID = 'lumi-bot-id';
 const botUser = { id: BOT_ID, tag: 'Lumi#1337', username: 'Lumi' };
@@ -550,6 +551,414 @@ await test('Pipeline completo: no envía nada si el modelo falla del todo', asyn
 
         await handleMention(trigger);
         assert.equal(channel.sent.length, 0, 'no debe enviar mensajes vacíos ni errores al canal');
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
+    }
+});
+
+// ============================================================================
+// 6. ADJUNTOS DE IMAGEN Y MULTIMODAL (LUMI-007)
+// ============================================================================
+
+await test('Valida y normaliza adjuntos de imagen soportados (PNG, JPEG, WEBP, GIF)', () => {
+    const png = validateImageAttachment({
+        contentType: 'image/png',
+        name: 'test.png',
+        url: 'http://cdn/test.png',
+        size: 1024
+    });
+    assert.equal(png.valid, true);
+    assert.equal(png.media.type, 'image');
+    assert.equal(png.media.mimeType, 'image/png');
+
+    const jpg = validateImageAttachment({
+        contentType: 'image/jpg',
+        name: 'test.jpg',
+        url: 'http://cdn/test.jpg',
+        size: 2048
+    });
+    assert.equal(jpg.valid, true);
+    assert.equal(jpg.media.mimeType, 'image/jpeg', 'image/jpg debe normalizarse a image/jpeg');
+
+    const webp = validateImageAttachment({
+        contentType: 'image/webp; charset=utf-8',
+        name: 'test.webp',
+        url: 'http://cdn/test.webp',
+        size: 3000
+    });
+    assert.equal(webp.valid, true);
+    assert.equal(webp.media.mimeType, 'image/webp');
+
+    const gif = validateImageAttachment({
+        contentType: 'image/gif',
+        name: 'anim.gif',
+        url: 'http://cdn/anim.gif',
+        size: 4000
+    });
+    assert.equal(gif.valid, true);
+    assert.equal(gif.media.mimeType, 'image/gif');
+});
+
+await test('Deduce MIME type de imagen por extensión cuando no hay contentType', () => {
+    assert.equal(normalizeImageMimeType('', 'foto.png'), 'image/png');
+    assert.equal(normalizeImageMimeType('application/octet-stream', 'foto.jpg'), 'image/jpeg');
+    assert.equal(normalizeImageMimeType(null, 'foto.webp'), 'image/webp');
+    assert.equal(normalizeImageMimeType(undefined, 'foto.gif'), 'image/gif');
+    assert.equal(normalizeImageMimeType('image/png', 'foto.bin'), 'image/png');
+    assert.equal(normalizeImageMimeType('', 'archivo.pdf'), '');
+});
+
+await test('Rechaza imágenes que exceden el tamaño máximo permitido (10 MB)', () => {
+    const oversized = validateImageAttachment({
+        contentType: 'image/png',
+        name: 'huge.png',
+        url: 'http://cdn/huge.png',
+        size: MAX_IMAGE_SIZE + 100
+    });
+    assert.equal(oversized.valid, false);
+    assert.equal(oversized.reason, 'oversized');
+    assert.ok(oversized.error.includes('10 MB'));
+});
+
+await test('Rechaza adjuntos con formatos o MIME types no soportados', () => {
+    const tiff = validateImageAttachment({
+        contentType: 'image/tiff',
+        name: 'photo.tiff',
+        url: 'http://cdn/photo.tiff',
+        size: 5000
+    });
+    assert.equal(tiff.valid, false);
+    assert.equal(tiff.reason, 'unsupported');
+    assert.ok(tiff.error.includes('image/tiff'));
+
+    const pdf = validateImageAttachment({
+        contentType: 'application/pdf',
+        name: 'doc.pdf',
+        url: 'http://cdn/doc.pdf',
+        size: 1000
+    });
+    assert.equal(pdf.valid, false);
+    assert.equal(pdf.reason, 'unsupported');
+    assert.ok(pdf.error.includes('application/pdf'));
+});
+
+await test('GeminiChatAdapter genera inlineData multimodal para adjuntos de imagen', async () => {
+    const adapter = new GeminiChatAdapter({ apiKey: 'test-key' });
+    let request;
+    adapter.client = {
+        models: {
+            generateContent: async (payload) => {
+                request = payload;
+                return { text: 'Veo un gato.', usageMetadata: {} };
+            }
+        }
+    };
+
+    const messages = [
+        {
+            role: 'user',
+            content: '¿Qué hay en esta imagen?',
+            mediaAttachments: [
+                {
+                    type: 'image',
+                    mimeType: 'image/png',
+                    data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+                    filename: 'cat.png',
+                    size: 100
+                }
+            ]
+        }
+    ];
+
+    const response = await adapter.complete(messages, { model: 'gemini-3.7-flash' });
+    assert.equal(response.content, 'Veo un gato.');
+
+    // Verificar que request.contents tiene las partes text e inlineData
+    const userParts = request.contents[0].parts;
+    assert.equal(userParts.length, 2);
+    assert.equal(userParts[0].text, '¿Qué hay en esta imagen?');
+    assert.deepEqual(userParts[1], {
+        inlineData: {
+            mimeType: 'image/png',
+            data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        }
+    });
+});
+
+await test('GeminiChatAdapter descarga imagen por URL y genera inlineData', async () => {
+    const adapter = new GeminiChatAdapter({ apiKey: 'test-key' });
+    let request;
+    adapter.client = {
+        models: {
+            generateContent: async (payload) => {
+                request = payload;
+                return { text: 'ok', usageMetadata: {} };
+            }
+        }
+    };
+
+    const originalFetch = globalThis.fetch;
+    const testBytes = Buffer.from('fake-webp-binary-data');
+    globalThis.fetch = async (url) => {
+        if (url === 'http://cdn/image.webp') {
+            return {
+                ok: true,
+                status: 200,
+                arrayBuffer: async () => testBytes.buffer.slice(testBytes.byteOffset, testBytes.byteOffset + testBytes.byteLength)
+            };
+        }
+        return originalFetch(url);
+    };
+
+    try {
+        await adapter.complete([
+            {
+                role: 'user',
+                content: 'describe esto',
+                mediaAttachments: [
+                    {
+                        type: 'image',
+                        mimeType: 'image/webp',
+                        url: 'http://cdn/image.webp',
+                        filename: 'image.webp',
+                        size: testBytes.length
+                    }
+                ]
+            }
+        ], { model: 'gemini-3.7-flash' });
+
+        const userParts = request.contents[0].parts;
+        assert.equal(userParts.length, 2);
+        assert.deepEqual(userParts[1], {
+            inlineData: {
+                mimeType: 'image/webp',
+                data: testBytes.toString('base64')
+            }
+        });
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+await test('Pipeline AC-1: Procesa adjuntos de imagen soportados (PNG/JPEG/WEBP) vía multimodal', async () => {
+    let receivedMessages = null;
+    const fake = {
+        complete: async (messages, options) => {
+            receivedMessages = messages;
+            return {
+                content: '<MESSAGE><TEXT_CONTENT>Es un círculo rojo.</TEXT_CONTENT></MESSAGE>',
+                toolCalls: null,
+                provider: 'fake',
+                model: options.model,
+            };
+        }
+    };
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const channel = createMockChannel({ history: [] });
+        const trigger = createMockMessage({
+            content: '<@lumi-bot-id> qué ves aquí?',
+            mentionsBot: true,
+            attachments: [
+                {
+                    url: 'http://cdn/circle.png',
+                    contentType: 'image/png',
+                    name: 'circle.png',
+                    size: 2048,
+                    data: 'base64-circle-png'
+                }
+            ],
+            channel,
+        });
+
+        await handleMention(trigger);
+
+        assert.ok(receivedMessages, 'debe llamar al modelo');
+        const userMsg = receivedMessages.find(m => m.role === 'user');
+        assert.ok(userMsg?.mediaAttachments, 'debe incluir mediaAttachments');
+        assert.equal(userMsg.mediaAttachments.length, 1);
+        assert.equal(userMsg.mediaAttachments[0].type, 'image');
+        assert.equal(userMsg.mediaAttachments[0].mimeType, 'image/png');
+        assert.equal(channel.sent.length, 1);
+        assert.equal(channel.sent[0].content, 'Es un círculo rojo.');
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
+    }
+});
+
+await test('Pipeline AC-1: Extrae imagen del mensaje citado si la mención no trae adjuntos', async () => {
+    let receivedMessages = null;
+    const fake = {
+        complete: async (messages, options) => {
+            receivedMessages = messages;
+            return {
+                content: '<MESSAGE><TEXT_CONTENT>Es un meme en formato webp.</TEXT_CONTENT></MESSAGE>',
+                toolCalls: null,
+                provider: 'fake',
+                model: options.model,
+            };
+        }
+    };
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const channel = createMockChannel({ history: [] });
+        const quoted = createMockMessage({
+            content: 'miren esto',
+            username: 'Beto',
+            attachments: [
+                {
+                    url: 'http://cdn/meme.webp',
+                    contentType: 'image/webp',
+                    name: 'meme.webp',
+                    size: 5000,
+                    data: 'base64-meme-webp'
+                }
+            ]
+        });
+        const trigger = createMockMessage({
+            content: '<@lumi-bot-id> qué es eso?',
+            mentionsBot: true,
+            reference: { messageId: quoted.id },
+            referenced: quoted,
+            channel,
+        });
+
+        await handleMention(trigger);
+
+        assert.ok(receivedMessages, 'debe llamar al modelo');
+        const userMsg = receivedMessages.find(m => m.role === 'user');
+        assert.ok(userMsg?.mediaAttachments, 'debe incluir mediaAttachments extraídos del citado');
+        assert.equal(userMsg.mediaAttachments.length, 1);
+        assert.equal(userMsg.mediaAttachments[0].mimeType, 'image/webp');
+        assert.equal(channel.sent.length, 1);
+        assert.equal(channel.sent[0].content, 'Es un meme en formato webp.');
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
+    }
+});
+
+await test('Pipeline AC-2: Rechaza adjuntos no soportados (MIME) con mensaje claro y sin llamar al modelo', async () => {
+    let modelCalled = false;
+    const fake = {
+        complete: async () => {
+            modelCalled = true;
+            return { content: 'no debería llegar aquí' };
+        }
+    };
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const channel = createMockChannel({ history: [] });
+        const trigger = createMockMessage({
+            content: '<@lumi-bot-id> lee este pdf',
+            mentionsBot: true,
+            attachments: [
+                {
+                    url: 'http://cdn/reporte.pdf',
+                    contentType: 'application/pdf',
+                    name: 'reporte.pdf',
+                    size: 1024
+                }
+            ],
+            channel,
+        });
+
+        await handleMention(trigger);
+
+        assert.equal(modelCalled, false, 'no debe llamar al modelo cuando el adjunto es rechazado');
+        assert.equal(channel.sent.length, 1, 'debe responder con mensaje de error');
+        assert.ok(
+            channel.sent[0].content.includes('no es compatible'),
+            'el mensaje debe explicar que el formato no es compatible'
+        );
+        assert.deepEqual(channel.sent[0].reply, { messageReference: trigger.id });
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
+    }
+});
+
+await test('Pipeline AC-2: Rechaza imágenes que exceden el tamaño máximo con mensaje claro y sin llamar al modelo', async () => {
+    let modelCalled = false;
+    const fake = {
+        complete: async () => {
+            modelCalled = true;
+            return { content: 'no debería llegar aquí' };
+        }
+    };
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const channel = createMockChannel({ history: [] });
+        const trigger = createMockMessage({
+            content: '<@lumi-bot-id> mira esta imagen gigante',
+            mentionsBot: true,
+            attachments: [
+                {
+                    url: 'http://cdn/gigante.png',
+                    contentType: 'image/png',
+                    name: 'gigante.png',
+                    size: 15 * 1024 * 1024 // 15 MB > 10 MB
+                }
+            ],
+            channel,
+        });
+
+        await handleMention(trigger);
+
+        assert.equal(modelCalled, false, 'no debe llamar al modelo cuando el adjunto es sobredimensionado');
+        assert.equal(channel.sent.length, 1, 'debe enviar mensaje de rechazo');
+        assert.ok(
+            channel.sent[0].content.includes('tamaño') || channel.sent[0].content.includes('10 MB'),
+            'el mensaje debe indicar el límite de tamaño'
+        );
+        assert.deepEqual(channel.sent[0].reply, { messageReference: trigger.id });
+    } finally {
+        ChatProviderFactory.createProvider = realCreateProvider;
+    }
+});
+
+await test('Pipeline AC-2: Rechaza adjunto no soportado o sobredimensionado en el mensaje citado', async () => {
+    let modelCalled = false;
+    const fake = {
+        complete: async () => {
+            modelCalled = true;
+            return { content: 'no debería llegar aquí' };
+        }
+    };
+    ChatProviderFactory.createProvider = () => fake;
+
+    try {
+        const channel = createMockChannel({ history: [] });
+        const quoted = createMockMessage({
+            content: 'acá está el archivo',
+            username: 'Beto',
+            attachments: [
+                {
+                    url: 'http://cdn/pesado.png',
+                    contentType: 'image/png',
+                    name: 'pesado.png',
+                    size: 12 * 1024 * 1024 // 12 MB
+                }
+            ]
+        });
+        const trigger = createMockMessage({
+            content: '<@lumi-bot-id> revisa el archivo de Beto',
+            mentionsBot: true,
+            reference: { messageId: quoted.id },
+            referenced: quoted,
+            channel,
+        });
+
+        await handleMention(trigger);
+
+        assert.equal(modelCalled, false, 'no debe llamar al modelo');
+        assert.equal(channel.sent.length, 1);
+        assert.ok(
+            channel.sent[0].content.includes('tamaño') || channel.sent[0].content.includes('10 MB'),
+            'debe rechazar la imagen citada por tamaño excesivo'
+        );
     } finally {
         ChatProviderFactory.createProvider = realCreateProvider;
     }

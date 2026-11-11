@@ -12,7 +12,7 @@ import { getConfig, getContextLimit } from '../utils/configStore.js';
 import { getDebugMode } from '../commands/debug.js';
 import { parseAIResponse } from './message/responseParser.js';
 import { sendTextMessage, sendReactions, sendDebugOutput } from './message/messageSender.js';
-import { summarizeYouTubeVideo } from '../services/media/mediaProcessor.js';
+import { summarizeYouTubeVideo, validateImageAttachment } from '../services/media/mediaProcessor.js';
 
 const MAX_TOOL_ITERATIONS = 10;
 
@@ -222,6 +222,60 @@ async function resolveVideoContext(message) {
 // ENTRADA PRINCIPAL
 // ============================================================================
 
+const AUDIO_MIMES = new Set([
+    'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/aiff',
+    'audio/aac', 'audio/ogg', 'audio/flac', 'audio/webm'
+]);
+
+function isAudioAttachment(attachment) {
+    if (!attachment) return false;
+    const mime = (attachment.contentType || attachment.mimeType || '').split(';')[0].trim().toLowerCase();
+    if (AUDIO_MIMES.has(mime) || mime.startsWith('audio/')) return true;
+    const ext = (attachment.name || attachment.filename || '').split('.').pop()?.toLowerCase();
+    return ['ogg', 'mp3', 'wav', 'flac', 'aac', 'm4a', 'webm'].includes(ext);
+}
+
+/**
+ * Extrae adjuntos candidatos para validación de imagen desde el mensaje o el mensaje citado.
+ * Si el mensaje que invoca tiene adjuntos no-audio, se procesan esos.
+ * Si no tiene y es una respuesta a otro mensaje, se procesan los del citado.
+ * @param {import('discord.js').Message} message
+ * @returns {Promise<Array<Object>>}
+ */
+async function extractCandidateAttachments(message) {
+    const fromMessage = [];
+    if (message.attachments && message.attachments.size > 0) {
+        for (const [, att] of message.attachments) {
+            if (!isAudioAttachment(att)) {
+                fromMessage.push(att);
+            }
+        }
+    }
+
+    if (fromMessage.length > 0) {
+        return fromMessage;
+    }
+
+    if (message.reference?.messageId && typeof message.fetchReference === 'function') {
+        try {
+            const referenced = await message.fetchReference();
+            if (referenced?.attachments && referenced.attachments.size > 0) {
+                const fromReferenced = [];
+                for (const [, att] of referenced.attachments) {
+                    if (!isAudioAttachment(att)) {
+                        fromReferenced.push(att);
+                    }
+                }
+                return fromReferenced;
+            }
+        } catch (err) {
+            console.warn('[MentionHandler] No se pudo obtener el mensaje citado:', err.message);
+        }
+    }
+
+    return [];
+}
+
 /**
  * Responde a una mención directa al bot.
  * @param {import('discord.js').Message} message - Mensaje que mencionó al bot
@@ -234,6 +288,24 @@ export async function handleMention(message) {
 
     // Indicador de "escribiendo..." mientras se genera la respuesta
     channel.sendTyping?.().catch(() => { });
+
+    // Validar y normalizar adjuntos de imagen antes de llamar al agente
+    const candidateAttachments = await extractCandidateAttachments(message);
+    const validImageMedia = [];
+
+    for (const att of candidateAttachments) {
+        const validation = validateImageAttachment(att);
+        if (!validation.valid) {
+            console.warn(`[Mention] Rechazando mención por adjunto inválido: ${validation.error}`);
+            await sendTextMessage(channel, {
+                send_text: true,
+                text_content: validation.error,
+                reply_to: message.id
+            });
+            return;
+        }
+        validImageMedia.push(validation.media);
+    }
 
     const promptContext = {
         channel,
@@ -251,6 +323,14 @@ export async function handleMention(message) {
             limit: getContextLimit(),
             extraNote
         });
+
+        if (validImageMedia.length > 0 && history.length > 0) {
+            const triggerEntry = history[history.length - 1];
+            triggerEntry.mediaAttachments = [
+                ...(triggerEntry.mediaAttachments || []),
+                ...validImageMedia
+            ];
+        }
 
         if (debugMode === 'full') {
             await sendDebugAttachment(channel, '⚙️ SYSTEM PROMPT', await getSystemMessage(promptContext));
